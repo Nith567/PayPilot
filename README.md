@@ -13,10 +13,7 @@ that executes onchain only when the quorum threshold is met. On top of that
 core, automation: scheduled/recurring sends, condition-triggered payments
 and email-initiated flows — each scoped by policy.
 
-- **Working demo:** deploy on Vercel → click **"Try Acme Corp demo"** → a
-  fully seeded fictional org: 3 wallets, onboarded vendors, funded treasury,
-  payouts awaiting approval.
-- **Self-serve:** anyone can sign in and create their own org.
+- **Live:** https://pay-pilot-mu.vercel.app — sign in and create your org.
 - **Network:** Base Sepolia (test USDC). Set `NEXT_PUBLIC_CHAIN=base` to run
   the identical flows on Base mainnet.
 
@@ -86,22 +83,18 @@ threshold is met (gas sponsored). Webhooks + polling update the ledger.
 
 ---
 
-## 60-second demo script
+## Try it live
 
-1. Landing → **Try Acme Corp demo** → sign in with your email (OTP).
-2. Acme Corp boots: 3 wallets (Treasury / Payroll / Bug Bounty Rewards),
-   3 onboarded vendors, treasury auto-funded with 5,000 test USDC, and
-   **two payouts pending quorum** ($1,250 → Northwind Parts, $800 →
-   SecResearcher-42).
-3. Open a payout → **0/2 signed** → tap **Approve & sign** (browser signs
-   with your Privy key) → PolicyBot co-signs after its policy re-check →
-   **Privy broadcasts the USDC transfer on Base Sepolia** → tx hash linked
-   to the explorer.
+1. https://pay-pilot-mu.vercel.app → **Create your organization** → sign in
+   with your email (OTP) → name your org.
+2. Invite teammates (Treasurer / Finance Officer / Viewer), add treasurers
+   as quorum signers, set your approval tier + threshold in Team settings.
+3. Onboard vendors → request a payout → approve → Privy broadcasts the USDC
+   transfer on Base Sepolia → tx hash linked to the explorer.
 4. **The fraud beat:** New payout → Custom address → paste any address →
-   **DENIED BY POLICY** — the pre-check, the enclave policy and PolicyBot's
-   withheld co-signature all stop it.
-5. **Add wallet:** create "Bug Bounty Rewards" (or any purpose) → new
-   onchain address + its own policy preset in one click.
+   **DENIED BY POLICY** — the pre-check and the enclave policy stop it.
+5. **Add wallet:** create any purpose-built wallet → new onchain address +
+   its own policy preset in one click.
 
 ---
 

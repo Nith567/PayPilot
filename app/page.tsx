@@ -37,29 +37,11 @@ const FEATURES = [
   },
 ];
 
-const STEPS = [
-  {
-    n: "01",
-    title: "One-tap Acme demo",
-    body: "A fully seeded org: 3 purpose-built wallets, vendors onboarded, treasury funded, payouts awaiting approval.",
-  },
-  {
-    n: "02",
-    title: "Approve → executed onchain",
-    body: "Tap Approve. Meet the quorum threshold and Privy broadcasts the USDC transfer on Base Sepolia — policy-checked at signature time.",
-  },
-  {
-    n: "03",
-    title: "Spoof a vendor address",
-    body: "Try paying a changed address. The wallet policy denies it at signature time — DENIED BY POLICY, even if everyone signed.",
-  },
-];
-
 export default function Home() {
   const router = useRouter();
   const { ready, authenticated, login, logout, user } = usePrivy();
   const api = useApi();
-  const [pending, setPending] = useState<null | "demo" | "own">(null);
+  const [pending, setPending] = useState<null | "own">(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [sdkSlow, setSdkSlow] = useState(false);
@@ -112,13 +94,8 @@ export default function Home() {
       setBusy(true);
       setError(null);
       try {
-        if (pending === "demo") {
-          await api("/api/demo", { method: "POST" });
-          if (!cancelled) router.push("/dashboard");
-        } else {
-          const { org } = await api("/api/orgs");
-          if (!cancelled) router.push(org ? "/dashboard" : "/onboarding");
-        }
+        const { org } = await api("/api/orgs");
+        if (!cancelled) router.push(org ? "/dashboard" : "/onboarding");
       } catch (err) {
         console.error(err);
         if (!cancelled) {
@@ -137,7 +114,7 @@ export default function Home() {
     };
   }, [ready, authenticated, pending, busy, api, router]);
 
-  const start = (which: "demo" | "own") => {
+  const start = () => {
     setError(null);
     if (!ready) {
       setError("Privy is still loading — give it a second and try again.");
@@ -146,12 +123,10 @@ export default function Home() {
     if (authenticated) {
       // Already signed in: run the action directly (visible feedback, no
       // reliance on effect chains).
-      setPending(which);
+      setPending("own");
       setBusy(true);
-      (which === "demo"
-        ? api("/api/demo", { method: "POST" }).then(() => router.push("/dashboard"))
-        : api("/api/orgs").then(({ org }) => router.push(org ? "/dashboard" : "/onboarding"))
-      )
+      api("/api/orgs")
+        .then(({ org }) => router.push(org ? "/dashboard" : "/onboarding"))
         .catch((err: unknown) => {
           setError(err instanceof Error ? err.message : "Request failed");
           setBusy(false);
@@ -161,7 +136,7 @@ export default function Home() {
     }
     // Not signed in: open the Privy login modal; the effect above resumes
     // the action after authentication completes.
-    setPending(which);
+    setPending("own");
     login();
   };
 
@@ -205,11 +180,8 @@ export default function Home() {
         </p>
 
         <div className="mt-8 flex flex-col gap-3 sm:flex-row">
-          <Button onClick={() => start("demo")} disabled={busy} className="h-12 px-6 text-base">
-            {busy && pending === "demo" ? "Booting Acme Corp… (first run takes ~20s)" : "Try Acme Corp demo →"}
-          </Button>
-          <Button variant="ghost" onClick={() => start("own")} disabled={busy} className="h-12 px-6 text-base">
-            {busy && pending === "own" ? "Loading your org…" : "Create your organization"}
+          <Button onClick={start} disabled={busy} className="h-12 px-6 text-base">
+            {busy && pending === "own" ? "Loading your org…" : "Create your organization →"}
           </Button>
         </div>
 
@@ -264,22 +236,9 @@ export default function Home() {
           ))}
         </div>
 
-        <h2 className="mt-16 text-2xl font-semibold tracking-tight">
-          The 60-second demo
-        </h2>
-        <div className="mt-6 grid w-full gap-4 text-left md:grid-cols-3">
-          {STEPS.map((s) => (
-            <div key={s.n} className="rounded-xl border border-line bg-surface p-5">
-              <div className="font-mono text-xs text-accent">{s.n}</div>
-              <h3 className="mt-1 text-sm font-semibold">{s.title}</h3>
-              <p className="mt-2 text-sm leading-relaxed text-muted">{s.body}</p>
-            </div>
-          ))}
-        </div>
-
         <p className="mt-16 text-sm text-muted">
-          Demo data is fictional. Test USDC on Base Sepolia — nothing real at
-          risk. <a className="text-accent hover:underline" href="https://github.com" target="_blank" rel="noreferrer">Source on GitHub</a>.
+          Test USDC on Base Sepolia — nothing real at risk.{" "}
+          <a className="text-accent hover:underline" href="https://github.com/Nith567/PayPilot" target="_blank" rel="noreferrer">Source on GitHub</a>.
         </p>
       </main>
     </div>

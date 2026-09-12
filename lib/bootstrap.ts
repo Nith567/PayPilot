@@ -1,33 +1,13 @@
 import { privy } from './privy';
-import { logActivity, members, newId, orgs, payouts, vendors, wallets } from './db';
+import { logActivity, members, newId, orgs, wallets } from './db';
 import {
   DEFAULT_TIER_USD,
   POLICY_PRESETS,
-  addConditionSetItems,
-  allowlistValues,
   buildPayoutPolicy,
   capWeiHex,
   createConditionSet,
 } from './policy-presets';
-import { createPayoutIntent, fundWalletFromDevEoa } from './payouts';
-import type { OrgDoc, PayoutDoc, WalletDoc, WalletPurpose } from './types';
-
-// Fictional demo data — recognizable Hardhat test addresses, nothing real.
-export const DEMO_VENDORS = [
-  { name: 'Northwind Parts', address: '0x5FbDB2315678afecb367f032d93F642f64180aa3', email: 'ap@northwind.example' },
-  { name: 'DevOps Dojo', address: '0x70997970C51812dc3A010C7d01b50e0d17dc79C8', email: 'billing@dojo.example' },
-  { name: 'SecResearcher-42', address: '0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC', email: 'researcher42@security.example' },
-];
-
-const DEMO_PAYOUTS = [
-  { walletPurpose: 'treasury' as WalletPurpose, vendorIndex: 0, amountUsdc: 1250, memo: 'Q3 parts order — PO-1042' },
-  { walletPurpose: 'bug_bounty' as WalletPurpose, vendorIndex: 2, amountUsdc: 800, memo: 'Critical severity bounty payout' },
-];
-
-export interface CreateOrgOptions {
-  name: string;
-  demo?: boolean;
-}
+import type { OrgDoc, WalletDoc, WalletPurpose } from './types';
 
 // Creates the whole Privy stack for a new organization:
 //   main key quorum → ops key quorum → organization → condition set →
@@ -41,7 +21,7 @@ export interface CreateOrgOptions {
 
 export async function createOrgForUser(
   userId: string,
-  { name, demo = false }: CreateOrgOptions,
+  { name }: { name: string },
 ): Promise<{ org: OrgDoc; wallets: WalletDoc[] }> {
   // 1) Key quorums — main (governs Treasury etc.) + ops (governs small payouts)
   const mainQuorum = await privy().keyQuorums().create({
@@ -66,9 +46,7 @@ export async function createOrgForUser(
   const conditionSetId = await createConditionSet(`${name} approved recipients`, org.id);
 
   // 4) Main wallets + policies (owned by the org's default key quorum)
-  const purposes: WalletPurpose[] = demo
-    ? ['treasury', 'payroll', 'bug_bounty']
-    : ['treasury'];
+  const purposes: WalletPurpose[] = ['treasury'];
   const createdWallets: WalletDoc[] = [];
   for (const purpose of purposes) {
     const preset = POLICY_PRESETS[purpose];
@@ -152,99 +130,5 @@ export async function createOrgForUser(
   });
   await logActivity({ orgId: org.id, type: 'org_created', message: `Organization "${name}" created` });
 
-  if (demo) {
-    await seedDemoData(orgDoc, createdWallets);
-  }
-
   return { org: orgDoc, wallets: createdWallets };
-}
-
-// Demo bank tops up the Treasury so payouts can execute onchain.
-// Best-effort: without ETH on the dev EOA this fails — the demo continues
-// with an unfunded (but fully functional) org and the activity feed says so.
-// Retrying is safe (called whenever the demo route finds a dry treasury).
-export async function fundDemoTreasury(org: OrgDoc, treasury: WalletDoc): Promise<void> {
-  try {
-    const fundHash = await fundWalletFromDevEoa(treasury.address, 5000);
-    if (fundHash) {
-      await logActivity({
-        orgId: org._id,
-        type: 'wallet_funded',
-        message: `Treasury funded with 5,000 USDC (demo bank)`,
-        txHash: fundHash,
-      });
-    }
-  } catch (err) {
-    await logActivity({
-      orgId: org._id,
-      type: 'wallet_funded',
-      message: `Demo bank funding failed — dev EOA needs Base Sepolia ETH for gas (${
-        err instanceof Error ? err.message.split('\n')[0] : 'unknown error'
-      })`,
-    });
-  }
-}
-
-// Idempotent: safe to re-run on a partially bootstrapped org (e.g. after a
-// failed demo bank transfer) — vendors are skipped if present, payouts are
-// seeded only when none exist, and funding failure is non-fatal.
-export async function seedDemoData(org: OrgDoc, walletList: WalletDoc[]): Promise<void> {
-  // Vendors → Mongo + Privy condition set (both address cases)
-  for (const v of DEMO_VENDORS) {
-    // Mongo equality is case-sensitive — match either address form.
-    const existing = await (await vendors()).findOne({
-      orgId: org._id,
-      $or: [{ address: v.address }, { address: v.address.toLowerCase() }],
-    });
-    if (existing) continue;
-    await (await vendors()).insertOne({
-      _id: newId(),
-      orgId: org._id,
-      name: v.name,
-      address: v.address,
-      email: v.email,
-      createdAt: Date.now(),
-    });
-    await addConditionSetItems(org.conditionSetId, allowlistValues(v.address));
-    await logActivity({ orgId: org._id, type: 'vendor_added', message: `Vendor onboarded: ${v.name}` });
-  }
-
-  // Demo bank tops up the Treasury (best-effort, see fundDemoTreasury)
-  const treasury = walletList.find((w) => w.purpose === 'treasury')!;
-  await fundDemoTreasury(org, treasury);
-
-  // Two pending payouts awaiting quorum approval (only when none exist yet)
-  const payoutCount = await (await payouts()).countDocuments({ orgId: org._id });
-  if (payoutCount > 0) return;
-
-  for (const seed of DEMO_PAYOUTS) {
-    const wallet = walletList.find((w) => w.purpose === seed.walletPurpose)!;
-    const vendor = DEMO_VENDORS[seed.vendorIndex];
-    const payoutDoc: PayoutDoc = {
-      _id: newId(),
-      orgId: org._id,
-      walletId: wallet._id,
-      walletName: wallet.name,
-      recipient: vendor.address,
-      vendorName: vendor.name,
-      amountUsdc: seed.amountUsdc,
-      amountWei: capWeiHex(seed.amountUsdc),
-      memo: seed.memo,
-      intentId: null,
-      status: 'pending',
-      txHash: null,
-      signedBy: [],
-      deniedReason: null,
-      creatorName: 'Finance Officer (demo)',
-      createdAt: Date.now(),
-    };
-    await (await payouts()).insertOne(payoutDoc);
-    await createPayoutIntent(wallet, payoutDoc);
-    await logActivity({
-      orgId: org._id,
-      type: 'payout_requested',
-      message: `Payout requested: $${seed.amountUsdc} → ${vendor.name} (${wallet.name})`,
-      payoutId: payoutDoc._id,
-    });
-  }
 }

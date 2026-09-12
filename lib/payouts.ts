@@ -1,11 +1,9 @@
-import { createPublicClient, createWalletClient, http, erc20Abi, parseUnits } from 'viem';
-import { privateKeyToAccount } from 'viem/accounts';
+import { createPublicClient, http, erc20Abi } from 'viem';
 import { privy } from './privy';
 import { logActivity, newId, payouts, vendors, wallets } from './db';
 import type { OrgDoc, PayoutDoc, WalletDoc } from './types';
 import { buildUsdcTransferRpc, getIntent } from './intent-sign';
 import { getChain, viemChain } from './chain';
-import { optionalEnv } from './env';
 import { DEFAULT_TIER_USD, capWeiHex } from './policy-presets';
 
 // ── Policy gates (PolicyBot's side of dual control) ────────────────────────
@@ -191,35 +189,6 @@ function extractTxHash(intent: any): string | null {
   } catch {
     return null;
   }
-}
-
-// ── Demo funding ────────────────────────────────────────────────────────────
-// The dev EOA ("demo bank") tops up freshly bootstrapped demo org wallets so
-// payouts can execute onchain immediately. Regular orgs fund themselves via
-// the in-app Fund screen. No-op when DEV_EOA_PRIVATE_KEY isn't configured.
-
-export async function fundWalletFromDevEoa(
-  recipient: string,
-  amountUsdc: number,
-): Promise<string | null> {
-  const key = optionalEnv('DEV_EOA_PRIVATE_KEY');
-  if (!key) return null;
-
-  const chain = getChain();
-  const account = privateKeyToAccount((key.startsWith('0x') ? key : `0x${key}`) as `0x${string}`);
-  const client = createWalletClient({
-    account,
-    chain: viemChain(),
-    transport: http(chain.rpcUrl),
-  });
-
-  const hash = await client.writeContract({
-    address: chain.usdcAddress,
-    abi: erc20Abi,
-    functionName: 'transfer',
-    args: [recipient as `0x${string}`, parseUnits(String(amountUsdc), 6)],
-  });
-  return hash;
 }
 
 // ── Balance (RPC view call) ─────────────────────────────────────────────────

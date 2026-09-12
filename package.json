@@ -7,9 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "typecheck": "tsc --noEmit",
-    "gen:keys": "node scripts/gen-keys.mjs",
-    "fund": "node scripts/fund.mjs"
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@privy-io/node": "^0.34.0",

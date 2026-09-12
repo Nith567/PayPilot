@@ -42,13 +42,14 @@ irreversible the moment it clears.
 
 ## Demo beats (60s)
 
-1. **Try Acme Corp demo** → seeded org: 3 wallets, vendors, funded treasury,
-   payouts pending.
-2. **Approve → executed** — browser signs, PolicyBot co-signs, USDC moves
-   on Base Sepolia. Explorer link on screen.
+1. **Create org** → Treasury + Ops wallets with policies attached, quorum
+   ready for the team.
+2. **Approve → executed** — signers approve, threshold met, USDC moves on
+   Base Sepolia. Explorer link on screen.
 3. **Fraud block** — pay a spoofed "changed" address → **DENIED BY POLICY**
-   at three layers: pre-check, enclave policy, withheld co-signature.
-4. **Add wallet** — new purpose, new address, new policy preset, one click.
+   at two layers: pre-check + enclave policy.
+4. **Set your own rules** — amount tier, quorum threshold, signers —
+   governance that itself requires quorum approval.
 
 ## Why it wins
 
