@@ -6,13 +6,18 @@ import { baseSepolia, base } from "viem/chains";
 
 export function Providers({ children }: { children: React.ReactNode }) {
   const appId = process.env.NEXT_PUBLIC_PRIVY_APP_ID ?? "";
-  // PrivyProvider renders client-only markup (modals, portals) — mounting it
-  // after hydration avoids the SSR/client attribute mismatch warning.
+  // PrivyProvider renders client-only markup and initializes against
+  // Privy's API — it must never render during SSR/prerender (it crashes
+  // the Vercel build sandbox). Gate the whole tree on hydration.
   const [mounted, setMounted] = useState(false);
   // Deliberate one-shot post-hydration flag (the canonical mounted-gate
-  // pattern) — required to avoid SSR/client mismatch inside PrivyProvider.
+  // pattern).
   // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => setMounted(true), []);
+
+  if (!mounted) {
+    return <div className="min-h-screen" />;
+  }
 
   if (!appId) {
     return (
@@ -36,7 +41,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
         supportedChains: [baseSepolia, base],
       }}
     >
-      {mounted ? children : <div className="min-h-screen" />}
+      {children}
     </PrivyProvider>
   );
 }
