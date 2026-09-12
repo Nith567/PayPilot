@@ -108,6 +108,21 @@ export default function DashboardPage() {
     };
   }, [api]);
 
+  // In-app scheduler tick: fire due schedules while the app is open (the
+  // Vercel cron is a once-a-day safety net on the Hobby plan).
+  useEffect(() => {
+    const tick = async () => {
+      try {
+        await api("/api/schedules/tick", { method: "POST" });
+      } catch {
+        /* ignore */
+      }
+    };
+    tick();
+    const timer = setInterval(tick, 60_000);
+    return () => clearInterval(timer);
+  }, [api]);
+
   const total = Object.values(balances).reduce<number>(
     (sum, b) => sum + (b ?? 0),
     0,
