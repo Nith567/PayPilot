@@ -5,7 +5,7 @@ import { PrivyProvider } from "@privy-io/react-auth";
 import { baseSepolia, base } from "viem/chains";
 
 export function Providers({ children }: { children: React.ReactNode }) {
-  const appId = process.env.NEXT_PUBLIC_PRIVY_APP_ID ?? "";
+  const appId = process.env.NEXT_PUBLIC_PRIVY_APP_ID ?? "cmtvhmmaj00fq0cjpezss9his";
   // PrivyProvider renders client-only markup and initializes against
   // Privy's API — it must never render during SSR/prerender (it crashes
   // the Vercel build sandbox). Gate the whole tree on hydration.
