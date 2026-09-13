@@ -18,7 +18,9 @@ export async function getReceivedEmail(emailId: string): Promise<any> {
   const key = optionalEnv('RESEND_API_KEY');
   if (!key) throw new Error('RESEND_API_KEY is not configured');
   const resend = new Resend(key);
-  return resend.emails.receiving.get(emailId);
+  const result: any = await resend.emails.receiving.get(emailId);
+  // The SDK wraps responses as { data: Email } — unwrap defensively.
+  return result?.data ?? result;
 }
 
 export async function sendEmail(
