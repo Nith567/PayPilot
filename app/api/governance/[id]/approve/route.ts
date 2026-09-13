@@ -1,7 +1,8 @@
 import { apiError, json, withAuth } from '@/lib/api-helpers';
+import { getBearerToken } from '@/lib/auth';
 import { resolveMembershipForUser } from '@/lib/authz';
 import { governance, members, orgs } from '@/lib/db';
-import { getIntent, submitUserSignature } from '@/lib/intent-sign';
+import { getIntent, submitUserAuthorization } from '@/lib/intent-sign';
 import type { GovernanceDoc } from '@/lib/types';
 
 // A quorum member approves a governance request. Signing is server-side:
@@ -18,9 +19,8 @@ export const POST = withAuth(async (req, userId, { params }) => {
   if (!record) return apiError('Governance request not found', 404);
   if (record.status !== 'pending') return apiError('Request is not pending', 409);
 
-  const body = await req.json();
-  const signature = String(body?.signature ?? '');
-  if (!signature) return apiError('Missing authorization signature');
+  const token = getBearerToken(req);
+  if (!token) return apiError('Missing session token', 401);
 
   const intent = await getIntent(record.intentId);
   const intentMembers: { user_id?: string; signed_at?: number | null }[] =
@@ -31,7 +31,9 @@ export const POST = withAuth(async (req, userId, { params }) => {
     return apiError('You are not a signer on this governance request', 403);
   }
 
-  await submitUserSignature(record.intentId, signature);
+  // Forward the user's access token — Privy derives their signing key and
+  // records the authorization (the "wallet owner via user token" path).
+  await submitUserAuthorization(record.intentId, token);
 
   // Refresh intent state and apply app-side effects if executed
   const fresh = await getIntent(record.intentId);

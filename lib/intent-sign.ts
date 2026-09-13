@@ -122,3 +122,28 @@ export async function submitUserSignature(
     );
   }
 }
+
+// Authorize an intent by forwarding the USER'S access token to Privy —
+// the endpoint is "callable by the wallet owner (via user token)", in which
+// case Privy derives the user's signing key automatically (the SDK behavior
+// the docs describe as automatic signature headers). This avoids the manual
+// authorization-signature path entirely.
+export async function submitUserAuthorization(
+  intentId: string,
+  userAccessToken: string,
+): Promise<void> {
+  const res = await fetch(`${PRIVY_API_BASE}/v1/intents/${intentId}/authorize`, {
+    method: 'POST',
+    headers: {
+      'privy-app-id': requireEnv('NEXT_PUBLIC_PRIVY_APP_ID'),
+      Authorization: `Bearer ${userAccessToken}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ timestamp: Date.now() }),
+  });
+  if (!res.ok) {
+    throw new Error(
+      `Privy rejected the authorization: ${await res.text()}`,
+    );
+  }
+}

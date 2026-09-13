@@ -1,8 +1,9 @@
 import { apiError, json, withAuth } from '@/lib/api-helpers';
+import { getBearerToken } from '@/lib/auth';
 import { resolveMembershipForUser, assertCan } from '@/lib/authz';
 import { payouts, wallets } from '@/lib/db';
 import { checkPolicyGates, syncPayoutStatus } from '@/lib/payouts';
-import { getIntent, submitUserSignature } from '@/lib/intent-sign';
+import { getIntent, submitUserAuthorization } from '@/lib/intent-sign';
 
 // Approve a payout. Signing happens SERVER-side: the SDK exchanges the
 // approver's JWT for a fresh user signing key and constructs the
@@ -23,9 +24,8 @@ export const POST = withAuth(async (req, userId, { params }) => {
   if (!payout.intentId) return apiError('Payout has no pending intent', 400);
   if (payout.status !== 'pending') return apiError('Payout is not pending', 409);
 
-  const body = await req.json();
-  const signature = String(body?.signature ?? '');
-  if (!signature) return apiError('Missing authorization signature');
+  const token = getBearerToken(req);
+  if (!token) return apiError('Missing session token', 401);
 
   const intent = await getIntent(payout.intentId);
   const members: { user_id?: string; signed_at?: number | null }[] =
@@ -57,8 +57,9 @@ export const POST = withAuth(async (req, userId, { params }) => {
     }
   }
 
-  // Approver's browser-made signature → Privy
-  await submitUserSignature(payout.intentId, signature);
+  // Forward the user's access token — Privy derives their signing key and
+  // records the authorization (the "wallet owner via user token" path).
+  await submitUserAuthorization(payout.intentId, token);
 
   // Refresh signer state from Privy and sync execution status
   const freshIntent = await getIntent(payout.intentId);
