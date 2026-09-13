@@ -27,7 +27,9 @@ export const POST = withAuth(async (req, userId, { params }) => {
   const intent = await getIntent(record.intentId);
   const intentMembers: { user_id?: string; signed_at?: number | null }[] =
     intent?.authorization_details?.[0]?.members ?? [];
-  if (!intentMembers.some((mem) => mem.user_id === userId)) {
+  // Same did:privy: prefix normalization as the payout approve route.
+  const bareUserId = userId.replace(/^did:privy:/, '');
+  if (!intentMembers.some((mem) => mem.user_id === userId || mem.user_id === bareUserId)) {
     return apiError('You are not a signer on this governance request', 403);
   }
 

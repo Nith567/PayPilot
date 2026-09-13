@@ -32,7 +32,12 @@ export const POST = withAuth(async (req, userId, { params }) => {
   const intent = await getIntent(payout.intentId);
   const members: { user_id?: string; signed_at?: number | null }[] =
     intent?.authorization_details?.[0]?.members ?? [];
-  const member = members.find((mem) => mem.user_id === userId);
+  // Privy reports intent members WITHOUT the did:privy: prefix while the
+  // session token's sub carries it — normalize before comparing.
+  const bareUserId = userId.replace(/^did:privy:/, '');
+  const member = members.find(
+    (mem) => mem.user_id === userId || mem.user_id === bareUserId,
+  );
   if (!member) return apiError('You are not a signer on this payout', 403);
   if (member.signed_at) return apiError('You already signed this payout', 409);
 
