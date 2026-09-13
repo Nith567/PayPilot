@@ -164,27 +164,34 @@ export default function PayoutDetailPage() {
         </div>
 
         <div className="space-y-2">
-          {(intent?.members ?? []).map((m) => {
-            const signed = !!m.signedAt || payout.signedBy.includes(m.name);
-            return (
-              <div
-                key={m.name}
-                className="flex items-center justify-between rounded-lg border border-line bg-surface2 px-4 py-2.5"
-              >
-                <div className="flex items-center gap-2">
-                  <span className="text-sm">{m.name}</span>
-                  <Badge tone="gray">quorum signer</Badge>
+          {(intent?.members ?? [])
+            // Once the intent is no longer pending, unsigned members are no
+            // longer relevant — only show who actually signed.
+            .filter(
+              (m) =>
+                payout.status === "pending" ||
+                !!m.signedAt ||
+                payout.signedBy.includes(m.name),
+            )
+            .map((m) => {
+              const signed = !!m.signedAt || payout.signedBy.includes(m.name);
+              return (
+                <div
+                  key={m.name}
+                  className="flex items-center justify-between rounded-lg border border-line bg-surface2 px-4 py-2.5"
+                >
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm">{m.name}</span>
+                    <Badge tone="gray">quorum signer</Badge>
+                  </div>
+                  {signed ? (
+                    <span className="text-sm text-emerald-300">✓ signed</span>
+                  ) : (
+                    <span className="text-sm text-muted">awaiting signature</span>
+                  )}
                 </div>
-                {signed ? (
-                  <span className="text-sm text-emerald-300">✓ signed</span>
-                ) : payout.status === "pending" ? (
-                  <span className="text-sm text-muted">awaiting signature</span>
-                ) : (
-                  <span className="text-sm text-muted">not required</span>
-                )}
-              </div>
-            );
-          })}
+              );
+            })}
         </div>
 
         {payout.status === "pending" ? (
