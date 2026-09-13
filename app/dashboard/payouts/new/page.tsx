@@ -54,9 +54,9 @@ export default function NewPayoutPage() {
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">New payout</h1>
         <p className="mt-1 text-sm text-muted">
-          The Privy policy and PolicyBot&apos;s co-signature only allow payouts to
-          onboarded vendors, within the wallet&apos;s cap. Try breaking that — it
-          won&apos;t work.
+          The Privy policy on each wallet only allows payouts to onboarded
+          vendors, within the wallet&apos;s cap. Try breaking that — it won&apos;t
+          work.
         </p>
       </div>
 

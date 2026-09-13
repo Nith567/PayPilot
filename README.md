@@ -7,11 +7,12 @@ Built for the **Privy — Best B2B financial product** ($2,500 category).
 PayPilot is a multi-tenant B2B platform where every organization gets real
 self-custodial wallets on Base Sepolia — Treasury, Payroll, Bug Bounty
 Rewards, whatever they need — each with its own spending policy, governed by
-a 2-of-2 key quorum: the org admin (human) + PolicyBot (an app-held key that
-co-signs only after re-checking the policy). Every payout is a Privy intent
-that executes onchain only when the quorum threshold is met. On top of that
-core, automation: scheduled/recurring sends, condition-triggered payments
-and email-initiated flows — each scoped by policy.
+a human key quorum (owner + treasurers, owner-settable threshold). Every
+payout is a Privy intent that executes onchain only when the quorum
+threshold is met, and every wallet policy is enforced in Privy's signing
+enclave. On top of the core, automation: scheduled/recurring sends,
+condition-triggered payments and email-initiated flows — each scoped by
+policy.
 
 - **Live:** https://pay-pilot-mu.vercel.app — sign in and create your org.
 - **Network:** Base Sepolia (test USDC). Set `NEXT_PUBLIC_CHAIN=base` to run
@@ -21,13 +22,13 @@ and email-initiated flows — each scoped by policy.
 
 ## Qualification requirements — how this project hits them
 
-| Requirement | How TreasuryPilot delivers |
+| Requirement | How PayPilot delivers |
 |---|---|
 | **Integrate Privy as a core part of the product** | Auth (email login via `@privy-io/react-auth`), organizations, wallets, key quorums, policies, condition sets, intents and webhooks all run through Privy. The app DB is only a UI mirror — there is no app-side authority to compromise. |
 | **Create or use at least one Privy wallet** | Every org gets 1–3+ real Privy organization wallets (`entity: {id, type: 'organization'}`), each with its own onchain address, created server-side via `@privy-io/node`. |
-| **Demonstrate a business/organization use case** | Fictional **Acme Corp** (seeded demo) + self-serve org onboarding for anyone. Wallets are purpose-built: Treasury, Payroll, Bug Bounty Rewards — "one org, many purpose-built wallets, each with its own spending policy." |
+| **Demonstrate a business/organization use case** | Self-serve org onboarding for any business — wallets are purpose-built: Treasury, Payroll, Bug Bounty Rewards, Ops — "one org, many purpose-built wallets, each with its own spending policy." |
 | **≥1 functional B2B workflow** | **Payout flow:** request → policy pre-check → Privy intent on the org wallet → quorum approval → Privy executes the USDC transfer onchain → status/tx-hash recorded. Plus wallet administration (add named wallet + policy preset) and vendor onboarding (allowlist management). |
-| **Use at least one Privy control** | **All four:** **key quorums** (2-of-2 admin + PolicyBot), **policies** (vendor allowlist via condition sets, per-tx caps via calldata decoding, chain + token lock-down — evaluated in Privy's enclave at signature time, default-deny), **signers** (authorization-key signatures from the browser + app-held key), **intents** (every payout is an async intent; Privy auto-executes at threshold). |
+| **Use at least one Privy control** | **All four:** **key quorums** (human team quorum, owner-settable 1-of-N…N-of-N threshold + amount-tiered wallets), **policies** (vendor allowlist via condition sets, per-tx caps via calldata decoding, chain + token lock-down — evaluated in Privy's enclave at signature time, default-deny), **signers** (quorum members; governance changes themselves require quorum approval once the threshold is ≥2), **intents** (every payout and governance change is an async intent; Privy auto-executes at threshold). |
 | **Working demo + source code** | Vercel deployment + this public repo. |
 | **Clearly explain how Privy enables the product** | Section below + [PITCH.md](PITCH.md) + the landing page's "How Privy powers this" cards. |
 
@@ -44,13 +45,14 @@ Roles live in the app DB for UX; money-critical powers are enforced by Privy.
 | **Finance Officer** | ✅ | ❌ (not a signer) | — |
 | **Viewer** | ❌ | ❌ | read-only |
 
-Invite flow: Owner invites by email → invitee logs in (Privy embedded auth)
-and accepts → Owner clicks **Add to quorum** → the Privy key quorum is
-updated with a **dual-control signature** (owner's session JWT + PolicyBot
-key, satisfying 2-of-2) → the Treasurer becomes a real signer on every org
-wallet. Approval semantics are 2-of-N: any two of {Owner, Treasurer, …,
-PolicyBot} execute — PolicyBot always co-signs after its policy re-check, so
-one human approval plus a passing policy completes a payout.
+Invite flow: Owner invites by email (the invitee's Privy wallet is
+pregenerated, ready on first login) → invitee accepts → Owner clicks **Add to
+quorum** → the Privy key quorums (main + ops) are updated → the Treasurer
+becomes a real signer on every org wallet. Approval semantics are
+owner-settable: payouts ≤ the org's amount tier route to the Ops wallet
+(single signer); larger payouts need the main quorum's threshold (any N of
+{Owner, Treasurer, …}). Once the threshold is ≥ 2, governance changes
+(add signer, change threshold) themselves require quorum approval.
 
 ---
 
@@ -58,17 +60,18 @@ one human approval plus a passing policy completes a payout.
 
 **Authority lives in Privy, not in our database.** If an attacker gets full
 access to our app servers and MongoDB, they still cannot move a cent:
-payouts are authorized by a Privy key quorum whose members are the admin's
-Privy-managed key and PolicyBot's key; transfers are policy-checked by
-Privy's enclave at signature time (allowlist, caps, chain, token — default
-deny); and execution happens through Privy intents only.
+payouts are authorized by a Privy key quorum of named humans (owner +
+treasurers), transfers are policy-checked by Privy's enclave at signature
+time (allowlist, caps, chain, token — default deny), and execution happens
+through Privy intents only.
 
-**Dual control via a 2-of-2 quorum.** The org admin signs in the browser
-(Privy authorization-key signature over the intent's request payload, via
-`useAuthorizationSignature()`). PolicyBot — an app-held P-256 key registered
-in the quorum — signs on the server, but only after re-checking the gates:
-recipient in the vendor allowlist, amount within the wallet's cap. A human
-decision plus an automated policy gate; neither side can move funds alone.
+**Human governance, amount-tiered.** Each org runs two quorums: the main
+quorum (owner-settable threshold) governs the main wallets, and an ops
+quorum (single signer) governs the Ops wallet whose policy cap equals the
+org's amount tier. Payouts ≤ the tier need one signer; anything larger needs
+the full threshold. Approval is authenticated via the approver's Privy
+session, and the wallet policy is re-checked at signature time — a named
+human decides, the enclave enforces.
 
 **Policies are enforcement, not decoration.** Each wallet's policy locks it
 down to exactly one capability: `eth_sendTransaction` to the USDC contract,
@@ -104,12 +107,12 @@ threshold is met (gas sponsored). Webhooks + polling update the ledger.
 Browser (Privy embedded auth · useAuthorizationSignature)
    │  id token / approval signatures
    ▼
-Next.js API routes (server-only; holds app secret + PolicyBot key)
+Next.js API routes (server-only; holds app secret)
    │  POST /api/orgs      → quorum → org → condition set → wallets+policies
    │  POST /api/wallets   → named wallet + policy preset
    │  POST /api/vendors   → DB row + condition-set allowlist item
    │  POST /api/payouts   → policy pre-check → intent (eth_sendTransaction USDC)
-   │  POST /api/payouts/:id/approve → user sig → PolicyBot co-sig (gated)
+   │  POST /api/payouts/:id/approve → quorum approval (user-token authorize)
    │  POST /api/webhooks/privy → intent.* events (polling is source of truth)
    ▼
 Privy (orgs · wallets · key quorums · policies · condition sets · intents)
@@ -185,20 +188,23 @@ fast-path, not a requirement.
 
 ```
 app/                  pages + API routes
-  page.tsx            landing + "Try Acme Corp demo"
-  dashboard/          overview, payouts (list/new/approve), vendors, wallets, team
-  api/                orgs, wallets, vendors, payouts, intents approve, activity, webhooks
+  page.tsx            landing + create-org entry
+  dashboard/          overview, payouts (list/new/approve), automations, vendors, team
+  api/                orgs, wallets, vendors, payouts, members, governance, schedules,
+                      automations, webhooks (privy + resend)
 lib/
-  bootstrap.ts        quorum → org → condition set → wallets(+policies) → demo seed
+  bootstrap.ts        quorums → org → condition set → wallets(+policies)
   policy-presets.ts   policy builders (allowlist, caps, chain/token lock-down)
-  intent-sign.ts      signature-payload construction + PolicyBot authorize
-  payouts.ts          policy gates, intent lifecycle, status sync, demo funding
-  bot-key.ts          P-256 PolicyBot key handling
+  intent-sign.ts      intent creation, user-token authorization, signing inputs
+  payouts.ts          policy gates, payout pipeline, intent lifecycle, status sync
+  schedules.ts        time-based automation engine
+  automations.ts      balance-condition automation engine
+  governance.ts       quorum mutations (direct or approval-intent)
+  email.ts            Resend notifications + inbound email body fetch
   chain.ts            Base Sepolia / Base mainnet config
   db.ts               MongoDB access (org-scoped)
 scripts/
-  gen-keys.mjs        generate PolicyBot + dev EOA keys
-  fund.mjs            send test USDC from the dev EOA to any address
+  reset-all.mjs       wipe all demo orgs for a clean slate
 ```
 
 ## Roadmap (phase 2 — automation)
@@ -210,6 +216,5 @@ scripts/
   auto-pay or quorum escalation; spoofed-address invoices blocked at the
   policy layer (the fraud-beat, now automated)
 - **Condition-based sends** — e.g. "pay when balance > X", "sweep idle USDC
-  above buffer" — server conditions + PolicyBot as the enforcement gate
-- Multi-human quorums (signed quorum updates when teammates join)
+  above buffer" — server conditions, policy-enforced at signature time
 - Balance alerts, `intents().transfer` flow

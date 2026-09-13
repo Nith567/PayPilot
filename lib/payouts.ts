@@ -6,7 +6,7 @@ import { buildUsdcTransferRpc, getIntent } from './intent-sign';
 import { getChain, viemChain } from './chain';
 import { DEFAULT_TIER_USD, capWeiHex } from './policy-presets';
 
-// ── Policy gates (PolicyBot's side of dual control) ────────────────────────
+// ── Policy gates (app-side pre-checks, mirrored by Privy's enclave policies) ──
 // Before PolicyBot co-signs, it re-checks the org's policy in the app layer.
 // The Privy policy on the wallet enforces the same rules at signature time,
 // so a spoofed recipient or an over-cap amount is stopped twice.

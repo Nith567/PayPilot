@@ -19,13 +19,13 @@ irreversible the moment it clears.
 
 - **One org, many purpose-built wallets** — Treasury, Payroll, Bug Bounty
   Rewards. Each is a real Privy organization wallet with its own policy.
-- **Automation inside policy** — scheduled/recurring sends (Privy wallet
-  automations), condition-triggered payments, and email-initiated flows —
-  every automated move still passes the wallet's policy and PolicyBot's gate.
+- **Automation inside policy** — scheduled/recurring sends, condition-triggered
+  payments, and email-initiated flows — every automated move still passes the
+  wallet's policy at signature time.
 - **Payout flow** — request → policy pre-check → async intent → quorum →
   executed onchain, tx hash recorded.
-- **2-of-2 key quorum** — the org admin (human, signs in-browser) +
-  **PolicyBot** (app-held key, co-signs only after re-checking the policy).
+- **Human key quorum** — owner + treasurers, owner-settable threshold, with an
+  amount tier routing small payouts to a single-signer Ops wallet.
 - **Vendor allowlist as a Privy condition set** — onboarding a vendor makes
   their address policy-eligible instantly; no wallet updates, no quorum
   ceremony.
