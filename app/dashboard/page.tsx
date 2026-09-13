@@ -201,7 +201,6 @@ export default function DashboardPage() {
                   </p>
                 </div>
               </div>
-              <Badge tone="blue">${w.capUsd.toLocaleString()}/tx cap</Badge>
             </div>
             <p className="mt-4 text-3xl font-semibold tracking-tight">
               $
