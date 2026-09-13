@@ -1,15 +1,18 @@
 import { apiError, json, withAuth } from '@/lib/api-helpers';
 import { getBearerToken } from '@/lib/auth';
 import { privy } from '@/lib/privy';
-import { logActivity, members } from '@/lib/db';
+import { addMemberToQuorums } from '@/lib/governance';
+import { logActivity, members, orgs } from '@/lib/db';
 import { ROLE_LABELS } from '@/lib/types';
 
 // An invited teammate accepts. Verification:
 //  - Pregenerated invite → the session's Privy user id is authoritative
 //    (Privy logs the invitee's email into the pregenerated user).
 //  - Legacy invite → verify the session email matches the invite.
-// Becoming a *signer* happens separately when the owner adds them to the
-// key quorum.
+// Treasurers and finance officers are automatically added to the key
+// quorums, so every accepted teammate counts as a signer. (If the main
+// quorum threshold is ≥ 2, the add itself becomes a governance intent the
+// signers approve in the UI.)
 export const POST = withAuth(async (req, userId, { params }) => {
   const { id } = await params;
   const member = await (await members()).findOne({ _id: id, status: 'invited' });
@@ -40,5 +43,27 @@ export const POST = withAuth(async (req, userId, { params }) => {
     message: `${member.email} accepted the ${ROLE_LABELS[member.role]} role`,
   });
 
-  return json({ member: { ...member, privyUserId: userId, status: 'active' } });
+  // Auto-add signer-eligible roles to the key quorums on accept.
+  let inQuorum = member.inQuorum ?? false;
+  if ((member.role === 'treasurer' || member.role === 'finance_officer') && !inQuorum) {
+    const org = await (await orgs()).findOne({ _id: member.orgId });
+    if (org) {
+      const result = await addMemberToQuorums(org, {
+        email: member.email,
+        role: member.role,
+        privyUserId: userId,
+      });
+      if (result.direct) {
+        inQuorum = true;
+        await (await members()).updateOne({ _id: member._id }, { $set: { inQuorum: true } });
+        await logActivity({
+          orgId: member.orgId,
+          type: 'member_signer',
+          message: `${member.email} joined the key quorums as a signer`,
+        });
+      }
+    }
+  }
+
+  return json({ member: { ...member, privyUserId: userId, status: 'active', inQuorum } });
 });

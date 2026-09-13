@@ -60,7 +60,7 @@ export const POST = withAuth(async (req, userId, { params }) => {
     if (record.kind === 'add_signer') {
       const addedUserIds = (record.body.user_ids as string[]) ?? [];
       await (await members()).updateMany(
-        { orgId: m.org._id, role: 'treasurer', privyUserId: { $in: addedUserIds } },
+        { orgId: m.org._id, role: { $in: ['treasurer', 'finance_officer'] }, privyUserId: { $in: addedUserIds } },
         { $set: { inQuorum: true } },
       );
     } else if (record.kind === 'set_threshold') {

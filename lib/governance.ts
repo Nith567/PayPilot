@@ -1,7 +1,8 @@
 import { privy } from './privy';
 import { getOrgSignerPrivateKeyBase64 } from './app-signer';
 import { governance, logActivity, newId } from './db';
-import type { GovernanceDoc } from './types';
+import { ROLE_LABELS } from './types';
+import type { GovernanceDoc, MemberRole, OrgDoc } from './types';
 
 export interface QuorumMutationInput {
   orgId: string;
@@ -10,7 +11,52 @@ export interface QuorumMutationInput {
   title: string;
   body: Record<string, unknown>;
   currentThreshold: number;
-  ownerToken: string;
+  ownerToken?: string;
+}
+
+// Add an activated member's Privy user to the org's key quorums (main + ops),
+// making them a real signer on every wallet.
+//  - Ops quorum runs at threshold 1 → the org signer key applies the change immediately.
+//  - Main quorum: threshold ≤ 1 → immediate; ≥ 2 → governance intent the
+//    signers approve in the UI.
+export async function addMemberToQuorums(
+  org: OrgDoc,
+  member: { email: string; role: MemberRole; privyUserId: string },
+): Promise<{ direct: boolean }> {
+  // 1) Ops quorum (threshold 1) — immediate, signed by the org signer key
+  const opsQuorum = await privy().keyQuorums().get(org.opsQuorumId);
+  const opsUserIds = [...(opsQuorum.user_ids ?? [])];
+  if (!opsUserIds.includes(member.privyUserId)) {
+    opsUserIds.push(member.privyUserId);
+    await privy().keyQuorums().update(org.opsQuorumId, {
+      authorization_context: {
+        authorization_private_keys: [getOrgSignerPrivateKeyBase64()],
+      },
+      user_ids: opsUserIds,
+      public_keys: (opsQuorum.authorization_keys ?? []).map((k) => k.public_key),
+      key_quorum_ids: opsQuorum.key_quorum_ids,
+      authorization_threshold: opsQuorum.authorization_threshold ?? 1,
+    });
+  }
+
+  // 2) Main quorum — direct when threshold ≤ 1, governance intent otherwise
+  const mainQuorum = await privy().keyQuorums().get(org.privyQuorumId);
+  const mainUserIds = [...(mainQuorum.user_ids ?? [])];
+  if (mainUserIds.includes(member.privyUserId)) return { direct: true };
+  mainUserIds.push(member.privyUserId);
+  const result = await mutateQuorum({
+    orgId: org._id,
+    quorumId: org.privyQuorumId,
+    kind: 'add_signer',
+    title: `Add ${ROLE_LABELS[member.role]} ${member.email} as a signer`,
+    body: {
+      user_ids: mainUserIds,
+      key_quorum_ids: mainQuorum.key_quorum_ids,
+      authorization_threshold: mainQuorum.authorization_threshold ?? undefined,
+    },
+    currentThreshold: mainQuorum.authorization_threshold ?? 1,
+  });
+  return { direct: result.direct };
 }
 
 // Mutate a key quorum (add signer / change threshold):
