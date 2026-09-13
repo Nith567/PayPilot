@@ -1,6 +1,7 @@
+import { generateAuthorizationSignatures } from '@privy-io/node';
 import { encodeFunctionData } from 'viem';
 import { getChain } from './chain';
-import { PRIVY_API_BASE, privyFetch } from './privy';
+import { PRIVY_API_BASE, privy, privyFetch } from './privy';
 import { requireEnv } from './env';
 
 // USDC transfer() — used for calldata encoding and by the policy's
@@ -103,4 +104,40 @@ export async function getIntent(intentId: string): Promise<any> {
     throw new Error(`getIntent failed: ${res.status} ${await res.text()}`);
   }
   return res.json();
+}
+
+// Approve an intent on behalf of the signed-in user, entirely server-side.
+// The SDK exchanges the user's JWT for a fresh user signing key (the
+// /wallets/authenticate flow) and constructs the authorization signature —
+// this is the documented robust path for user-type quorum members
+// (browser-side signing produced "No valid authorization key found").
+export async function authorizeIntentForUser(
+  token: string,
+  intentId: string,
+  input: SignatureInput,
+): Promise<void> {
+  const [signature] = await generateAuthorizationSignatures(privy(), {
+    authorizationContext: { user_jwts: [token] },
+    input: {
+      version: 1,
+      method: input.method,
+      url: input.url,
+      body: input.body,
+      headers: input.headers,
+      // Bind the signature to this intent (client input type documents it;
+      // the node SDK type omits it — Privy accepts it in the payload).
+      intent_id: input.intent_id,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    } as any,
+  });
+
+  const res = await privyFetch(`/v1/intents/${intentId}/authorize`, {
+    method: 'POST',
+    body: JSON.stringify({ signature, timestamp: Date.now() }),
+  });
+  if (!res.ok) {
+    throw new Error(
+      `authorizeIntentForUser failed: ${res.status} ${await res.text()}`,
+    );
+  }
 }

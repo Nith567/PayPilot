@@ -1,15 +1,15 @@
 import { apiError, json, withAuth } from '@/lib/api-helpers';
+import { getBearerToken } from '@/lib/auth';
 import { resolveMembershipForUser } from '@/lib/authz';
-import { privyFetch } from '@/lib/privy';
 import { governance, members, orgs } from '@/lib/db';
-import { getIntent } from '@/lib/intent-sign';
+import { authorizeIntentForUser, buildQuorumSignatureInput, getIntent } from '@/lib/intent-sign';
 import type { GovernanceDoc } from '@/lib/types';
 
-// A quorum member approves a governance request: their browser-made
-// authorization signature is submitted to Privy's authorize endpoint. When
-// the threshold is met, Privy applies the quorum mutation automatically —
-// the route then syncs the app-side effects (member signer flag / stored
-// threshold).
+// A quorum member approves a governance request. Signing is server-side:
+// the SDK exchanges the approver's JWT for a fresh user signing key,
+// constructs the authorization signature and submits it. When the threshold
+// is met, Privy applies the quorum mutation — the route then syncs the
+// app-side effects (member signer flag / stored threshold).
 export const POST = withAuth(async (req, userId, { params }) => {
   const { id } = await params;
   const m = await resolveMembershipForUser(userId);
@@ -19,10 +19,8 @@ export const POST = withAuth(async (req, userId, { params }) => {
   if (!record) return apiError('Governance request not found', 404);
   if (record.status !== 'pending') return apiError('Request is not pending', 409);
 
-  const body = await req.json();
-  const signature = String(body?.signature ?? '');
-  const timestamp = body?.timestamp ? Number(body.timestamp) : Date.now();
-  if (!signature) return apiError('Missing authorization signature');
+  const token = getBearerToken(req);
+  if (!token) return apiError('Missing session token', 401);
 
   const intent = await getIntent(record.intentId);
   const intentMembers: { user_id?: string; signed_at?: number | null }[] =
@@ -33,13 +31,11 @@ export const POST = withAuth(async (req, userId, { params }) => {
     return apiError('You are not a signer on this governance request', 403);
   }
 
-  const res = await privyFetch(`/v1/intents/${record.intentId}/authorize`, {
-    method: 'POST',
-    body: JSON.stringify({ signature, timestamp }),
-  });
-  if (!res.ok) {
-    return apiError(`Privy rejected the signature: ${await res.text()}`, 400);
-  }
+  await authorizeIntentForUser(
+    token,
+    record.intentId,
+    buildQuorumSignatureInput(record.quorumId, record.intentId, record.body),
+  );
 
   // Refresh intent state and apply app-side effects if executed
   const fresh = await getIntent(record.intentId);

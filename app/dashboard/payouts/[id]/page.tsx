@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useParams } from "next/navigation";
-import { useAuthorizationSignature } from "@privy-io/react-auth";
 import { useApi } from "@/lib/client-api";
 import { txUrl } from "@/lib/chain";
 import { Badge, Button, Card, StatusChip } from "@/app/ui";
@@ -25,12 +24,9 @@ export default function PayoutDetailPage() {
   const params = useParams<{ id: string }>();
   const id = params.id;
   const api = useApi();
-  const { generateAuthorizationSignature } = useAuthorizationSignature();
 
   const [payout, setPayout] = useState<PayoutDoc | null>(null);
   const [intent, setIntent] = useState<IntentInfo | null>(null);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [signatureInput, setSignatureInput] = useState<any>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -39,7 +35,6 @@ export default function PayoutDetailPage() {
       const data = await api(`/api/payouts/${id}`);
       setPayout(data.payout);
       setIntent(data.intent);
-      setSignatureInput(data.signatureInput ?? null);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load payout");
     }
@@ -58,18 +53,14 @@ export default function PayoutDetailPage() {
   }, [load, payout?.status]);
 
   const approve = async () => {
-    if (!signatureInput) return;
     setBusy(true);
     setError(null);
     try {
-      // Sign the intent-bound request input with the user's authorization
-      // key — Privy's hook canonicalizes the structured input (including
-      // the intent_id binding) and returns the ECDSA P-256 signature.
-      const { signature } = await generateAuthorizationSignature(signatureInput);
-
+      // Signing happens server-side (JWT → user signing key exchange) —
+      // the client just requests the approval.
       const data = await api(`/api/payouts/${id}/approve`, {
         method: "POST",
-        body: JSON.stringify({ signature }),
+        body: JSON.stringify({}),
       });
       setPayout(data.payout);
       load();
@@ -196,20 +187,16 @@ export default function PayoutDetailPage() {
             ) : null}
             <Button
               onClick={approve}
-              disabled={busy || !signatureInput || userSigned}
+              disabled={busy || userSigned}
               className="w-full"
             >
-              {busy
-                ? "Signing…"
-                : userSigned
-                  ? "Signed — awaiting PolicyBot"
-                  : "Approve & sign"}
+              {busy ? "Signing…" : userSigned ? "Signed ✓" : "Approve & sign"}
             </Button>
             <p className="text-xs text-muted">
-              Approving signs the intent&apos;s request with your Privy
-              authorization key. When the quorum threshold is met, Privy
-              executes — and the wallet&apos;s policy (allowlist, caps) is
-              checked at signature time.
+              Approval is signed server-side with your Privy session key. When
+              the quorum threshold is met, Privy executes — and the
+              wallet&apos;s policy (allowlist, caps) is checked at signature
+              time.
             </p>
           </>
         ) : null}
