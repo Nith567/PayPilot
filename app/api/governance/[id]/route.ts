@@ -15,7 +15,7 @@ export const GET = withAuth(async (_req, userId, { params }) => {
 
   const signatureInput =
     record.status === 'pending'
-      ? buildQuorumSignatureInput(record.quorumId, record.intentId, record.body)
+      ? buildQuorumSignatureInput(record.quorumId, record.body)
       : null;
 
   return json({ governance: record, signatureInput });

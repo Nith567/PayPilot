@@ -37,7 +37,7 @@ export const GET = withAuth(async (_req, userId, { params }) => {
       const wallet = await (await wallets()).findOne({ _id: fresh.walletId });
       if (wallet) {
         const rpcBody = buildUsdcTransferRpc(fresh.recipient, fresh.amountUsdc);
-        signatureInput = buildIntentSignatureInput(wallet._id, fresh.intentId, rpcBody);
+        signatureInput = buildIntentSignatureInput(wallet._id, rpcBody);
       }
     }
   }

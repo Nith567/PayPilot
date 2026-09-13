@@ -50,22 +50,21 @@ export function buildUsdcTransferRpc(recipient: string, amountUsdc: number) {
 
 // The structured signing input every approver signs. Approvers pass this
 // object directly to useAuthorizationSignature().generateAuthorizationSignature()
-// — Privy's client hook canonicalizes it. The intent_id binding is REQUIRED:
-// without it, Privy cannot map the signature to a valid authorization key
-// ("No valid authorization key found for signature").
+// — Privy's client hook canonicalizes it. The payload must match the
+// intent's request_details EXACTLY ({version, method, url, body, headers} —
+// no intent_id: adding one shifts the canonical bytes and Privy rejects
+// with "Invalid signature for intent").
 export interface SignatureInput {
   version: 1;
   method: 'POST' | 'PUT' | 'PATCH' | 'DELETE';
   url: string;
   body: Record<string, unknown>;
   headers: { 'privy-app-id': string };
-  intent_id: string;
 }
 
 // Payout intents: the underlying wallet RPC request.
 export function buildIntentSignatureInput(
   walletId: string,
-  intentId: string,
   rpcBody: Record<string, unknown>,
 ): SignatureInput {
   return {
@@ -74,14 +73,12 @@ export function buildIntentSignatureInput(
     url: `${PRIVY_API_BASE}/v1/wallets/${walletId}/rpc`,
     body: rpcBody,
     headers: { 'privy-app-id': requireEnv('NEXT_PUBLIC_PRIVY_APP_ID') },
-    intent_id: intentId,
   };
 }
 
 // Governance intents: the underlying key-quorum PATCH.
 export function buildQuorumSignatureInput(
   quorumId: string,
-  intentId: string,
   body: Record<string, unknown>,
 ): SignatureInput {
   return {
@@ -90,7 +87,6 @@ export function buildQuorumSignatureInput(
     url: `${PRIVY_API_BASE}/v1/key_quorums/${quorumId}`,
     body,
     headers: { 'privy-app-id': requireEnv('NEXT_PUBLIC_PRIVY_APP_ID') },
-    intent_id: intentId,
   };
 }
 
