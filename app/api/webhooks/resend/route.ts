@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createHmac, timingSafeEqual } from 'node:crypto';
+import { Webhook } from 'svix';
 import { optionalEnv } from '@/lib/env';
 import { orgs, vendors, logActivity } from '@/lib/db';
 import { createOrgPayout } from '@/lib/payouts';
@@ -17,29 +17,30 @@ import { getReceivedEmail, sendEmail } from '@/lib/email';
 export async function POST(req: NextRequest) {
   const raw = await req.text();
 
+  // Svix-style signature verification (the official Resend scheme).
   const secret = optionalEnv('RESEND_WEBHOOK_SECRET');
   if (secret) {
-    const id = req.headers.get('svix-id');
-    const ts = req.headers.get('svix-timestamp');
-    const sigHeader = req.headers.get('svix-signature');
-    if (!id || !ts || !sigHeader) {
-      return NextResponse.json({ error: 'missing signature headers' }, { status: 400 });
+    const wh = new Webhook(secret);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let event: any;
+    try {
+      const verified = wh.verify(raw, {
+        'svix-id': req.headers.get('svix-id') ?? '',
+        'svix-timestamp': req.headers.get('svix-timestamp') ?? '',
+        'svix-signature': req.headers.get('svix-signature') ?? '',
+      });
+      event = typeof verified === 'string' ? JSON.parse(verified) : verified;
+    } catch {
+      return NextResponse.json({ error: 'invalid signature' }, { status: 401 });
     }
-    const sig = sigHeader.split(' ').map((s) => s.split(',')[1]).find(Boolean) ?? '';
-    const expected = createHmac('sha256', secret).update(`${id}.${ts}.${raw}`).digest('base64');
-    const ok =
-      sig.length === expected.length &&
-      timingSafeEqual(Buffer.from(sig), Buffer.from(expected));
-    if (!ok) return NextResponse.json({ error: 'invalid signature' }, { status: 401 });
+    return handleEvent(event);
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let event: any;
-  try {
-    event = JSON.parse(raw);
-  } catch {
-    return NextResponse.json({ error: 'invalid json' }, { status: 400 });
-  }
+  return handleEvent(JSON.parse(raw));
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function handleEvent(event: any): Promise<NextResponse> {
   if (event?.type !== 'email.received') return NextResponse.json({ ok: true });
 
   const from: string = String(event?.data?.from ?? '').toLowerCase();
