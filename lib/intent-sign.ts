@@ -39,7 +39,12 @@ export function buildUsdcTransferRpc(recipient: string, amountUsdc: number) {
   return {
     method: 'eth_sendTransaction',
     caip2: chain.caip2,
-    sponsor: true, // gas sponsored — the org wallet needs no ETH
+    // Wallet-paid gas (sponsor: false): the org wallet pays gas from its own
+    // ETH. Privy gas sponsorship additionally requires TEE execution mode —
+    // with sponsor: true and sponsorship unavailable, execution hard-fails.
+    // Set NEXT_PUBLIC_SPONSOR_GAS=true (and enable sponsorship in the Privy
+    // dashboard) to switch back to sponsored gas.
+    sponsor: process.env.NEXT_PUBLIC_SPONSOR_GAS === 'true',
     params: {
       transaction: {
         to: chain.usdcAddress,
