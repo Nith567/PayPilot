@@ -63,7 +63,9 @@ export default function PayoutsPage() {
                 </p>
               </div>
               <span className="text-xs text-muted">
-                {p.signedBy.length > 0 ? `${p.signedBy.join(" + ")}` : "0/2 signed"}
+                {p.signedBy.length > 0
+                  ? `${p.signedBy.join(" + ")}`
+                  : `${p.signedBy.length}/${p.threshold ?? "?"} signed`}
               </span>
               <StatusChip status={p.status} />
             </Link>

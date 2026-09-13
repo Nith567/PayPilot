@@ -82,6 +82,7 @@ export interface PayoutDoc {
   signedBy: string[];
   deniedReason: string | null;
   creatorName: string; // who requested it (role-based audit trail)
+  threshold?: number; // approval threshold, captured from the Privy intent
   createdAt: number;
 }
 

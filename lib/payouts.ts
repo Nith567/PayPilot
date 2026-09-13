@@ -127,7 +127,11 @@ export async function createPayoutIntent(
   const intent = (await privy().intents().rpc(wallet._id, rpcBody as any)) as any;
   const intentId: string = intent.intent_id ?? intent.id;
   if (!intentId) throw new Error('Privy did not return an intent id');
-  await (await payouts()).updateOne({ _id: payout._id }, { $set: { intentId } });
+  const threshold: number | undefined = intent?.authorization_details?.[0]?.threshold;
+  await (await payouts()).updateOne(
+    { _id: payout._id },
+    { $set: { intentId, threshold: threshold ?? payout.threshold } },
+  );
   return intentId;
 }
 
