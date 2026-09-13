@@ -18,25 +18,30 @@ export async function POST(req: NextRequest) {
   const raw = await req.text();
 
   // Svix-style signature verification (the official Resend scheme).
+  // The svix wrapper returns nothing on success (jsonParse:false) — we
+  // parse the raw payload ourselves after the signature check passes.
   const secret = optionalEnv('RESEND_WEBHOOK_SECRET');
   if (secret) {
     const wh = new Webhook(secret);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    let event: any;
     try {
-      const verified = wh.verify(raw, {
+      wh.verify(raw, {
         'svix-id': req.headers.get('svix-id') ?? '',
         'svix-timestamp': req.headers.get('svix-timestamp') ?? '',
         'svix-signature': req.headers.get('svix-signature') ?? '',
       });
-      event = typeof verified === 'string' ? JSON.parse(verified) : verified;
     } catch {
       return NextResponse.json({ error: 'invalid signature' }, { status: 401 });
     }
-    return handleEvent(event);
   }
 
-  return handleEvent(JSON.parse(raw));
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let event: any;
+  try {
+    event = JSON.parse(raw);
+  } catch {
+    return NextResponse.json({ error: 'invalid json' }, { status: 400 });
+  }
+  return handleEvent(event);
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any

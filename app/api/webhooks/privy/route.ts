@@ -12,27 +12,28 @@ export async function POST(req: NextRequest) {
   const raw = await req.text();
 
   // Svix-style signature verification (Privy uses the same scheme).
+  // The svix wrapper returns nothing on success (jsonParse:false) — we
+  // parse the raw payload ourselves after the signature check passes.
   const secret = optionalEnv('PRIVY_WEBHOOK_SECRET');
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let event: any;
   if (secret) {
     const wh = new Webhook(secret);
     try {
-      const verified = wh.verify(raw, {
+      wh.verify(raw, {
         'svix-id': req.headers.get('svix-id') ?? '',
         'svix-timestamp': req.headers.get('svix-timestamp') ?? '',
         'svix-signature': req.headers.get('svix-signature') ?? '',
       });
-      event = typeof verified === 'string' ? JSON.parse(verified) : verified;
     } catch {
       return NextResponse.json({ error: 'invalid signature' }, { status: 401 });
     }
-  } else {
-    try {
-      event = JSON.parse(raw);
-    } catch {
-      return NextResponse.json({ error: 'invalid json' }, { status: 400 });
-    }
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let event: any;
+  try {
+    event = JSON.parse(raw);
+  } catch {
+    return NextResponse.json({ error: 'invalid json' }, { status: 400 });
   }
 
   const type: string | undefined = event?.type;
