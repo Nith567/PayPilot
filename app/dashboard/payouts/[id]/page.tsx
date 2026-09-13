@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useParams } from "next/navigation";
-import { useIdentityToken } from "@privy-io/react-auth";
+import { getIdentityToken } from "@privy-io/react-auth";
 import { useApi } from "@/lib/client-api";
 import { txUrl } from "@/lib/chain";
 import { Badge, Button, Card, StatusChip } from "@/app/ui";
@@ -25,7 +25,6 @@ export default function PayoutDetailPage() {
   const params = useParams<{ id: string }>();
   const id = params.id;
   const api = useApi();
-  const { identityToken } = useIdentityToken();
 
   const [payout, setPayout] = useState<PayoutDoc | null>(null);
   const [intent, setIntent] = useState<IntentInfo | null>(null);
@@ -60,10 +59,12 @@ export default function PayoutDetailPage() {
     try {
       // Signing happens server-side (identity token → user signing key
       // exchange) — the client just requests the approval.
+      const idToken = await getIdentityToken();
+      if (!idToken) throw new Error("No identity token — sign out and back in");
       const data = await api(`/api/payouts/${id}/approve`, {
         method: "POST",
         body: JSON.stringify({}),
-        headers: { "x-privy-id-token": identityToken ?? "" },
+        headers: { "x-privy-id-token": idToken },
       });
       setPayout(data.payout);
       load();
