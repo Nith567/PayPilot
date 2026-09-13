@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useParams } from "next/navigation";
-import { useAuthorizationSignature } from "@privy-io/react-auth";
 import { useApi } from "@/lib/client-api";
 import { txUrl } from "@/lib/chain";
 import { Badge, Button, Card, StatusChip } from "@/app/ui";
@@ -25,12 +24,9 @@ export default function PayoutDetailPage() {
   const params = useParams<{ id: string }>();
   const id = params.id;
   const api = useApi();
-  const { generateAuthorizationSignature } = useAuthorizationSignature();
 
   const [payout, setPayout] = useState<PayoutDoc | null>(null);
   const [intent, setIntent] = useState<IntentInfo | null>(null);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [signatureInput, setSignatureInput] = useState<any>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -39,7 +35,6 @@ export default function PayoutDetailPage() {
       const data = await api(`/api/payouts/${id}`);
       setPayout(data.payout);
       setIntent(data.intent);
-      setSignatureInput(data.signatureInput ?? null);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load payout");
     }
@@ -61,13 +56,11 @@ export default function PayoutDetailPage() {
     setBusy(true);
     setError(null);
     try {
-      if (!signatureInput) return;
-      // Browser-side signing with the user's authorization key over the
-      // intent-bound request input.
-      const { signature } = await generateAuthorizationSignature(signatureInput);
+      // The server forwards your session token to Privy's authorize
+      // endpoint — Privy derives your signing key automatically.
       const data = await api(`/api/payouts/${id}/approve`, {
         method: "POST",
-        body: JSON.stringify({ signature }),
+        body: JSON.stringify({}),
       });
       setPayout(data.payout);
       load();
@@ -194,7 +187,7 @@ export default function PayoutDetailPage() {
             ) : null}
             <Button
               onClick={approve}
-              disabled={busy || !signatureInput || userSigned}
+              disabled={busy || userSigned}
               className="w-full"
             >
               {busy ? "Signing…" : userSigned ? "Signed ✓" : "Approve & sign"}
