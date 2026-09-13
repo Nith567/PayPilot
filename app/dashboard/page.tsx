@@ -7,6 +7,7 @@ import { useOrg } from "@/lib/dashboard-context";
 import { addressUrl } from "@/lib/chain";
 import { Badge, Button, Card, CopyAddr } from "@/app/ui";
 import type { ActivityDoc } from "@/lib/types";
+import { PersonalWalletCard } from "./team/personal-wallet-card";
 
 const PURPOSE_LABEL: Record<string, string> = {
   treasury: "Treasury",
@@ -130,6 +131,9 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-8">
+      {/* Personal wallet: balances + send, front and center */}
+      <PersonalWalletCard />
+
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Treasury</h1>
