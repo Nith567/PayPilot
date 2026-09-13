@@ -3,7 +3,7 @@ import { createHmac, timingSafeEqual } from 'node:crypto';
 import { optionalEnv } from '@/lib/env';
 import { orgs, vendors, logActivity } from '@/lib/db';
 import { createOrgPayout } from '@/lib/payouts';
-import { sendEmail } from '@/lib/email';
+import { getReceivedEmail, sendEmail } from '@/lib/email';
 
 // Resend inbound-email webhook — the "vendor emails an invoice" flow.
 //
@@ -43,8 +43,20 @@ export async function POST(req: NextRequest) {
   if (event?.type !== 'email.received') return NextResponse.json({ ok: true });
 
   const from: string = String(event?.data?.from ?? '').toLowerCase();
-  const text: string = String(event?.data?.text ?? '') + ' ' + String(event?.data?.subject ?? '');
-  const subject: string = String(event?.data?.subject ?? 'Invoice');
+  // Resend webhooks carry metadata only — fetch the full email for the body.
+  let text = '';
+  let subject = String(event?.data?.subject ?? 'Invoice');
+  const emailId = String(event?.data?.email_id ?? '');
+  if (emailId) {
+    try {
+      const email = await getReceivedEmail(emailId);
+      text = String(email?.text ?? email?.html ?? '');
+      subject = String(email?.subject ?? subject);
+    } catch (err) {
+      console.error('[resend] failed to fetch email body:', err);
+    }
+  }
+  text = text + ' ' + subject;
 
   // Find the org by the vendor's registered email.
   const vendor = await (await vendors()).findOne({ email: from });

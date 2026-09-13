@@ -11,6 +11,16 @@ export function emailEnabled(): boolean {
   return !!optionalEnv('RESEND_API_KEY');
 }
 
+// Fetch a received email's full content — Resend webhooks carry metadata
+// only (from/to/subject), the body must be pulled by email id.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export async function getReceivedEmail(emailId: string): Promise<any> {
+  const key = optionalEnv('RESEND_API_KEY');
+  if (!key) throw new Error('RESEND_API_KEY is not configured');
+  const resend = new Resend(key);
+  return resend.emails.receiving.get(emailId);
+}
+
 export async function sendEmail(
   to: string,
   subject: string,
