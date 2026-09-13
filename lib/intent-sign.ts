@@ -107,17 +107,16 @@ export async function getIntent(intentId: string): Promise<any> {
 }
 
 // Approve an intent on behalf of the signed-in user, entirely server-side.
-// The SDK exchanges the user's JWT for a fresh user signing key (the
-// /wallets/authenticate flow) and constructs the authorization signature —
-// this is the documented robust path for user-type quorum members
-// (browser-side signing produced "No valid authorization key found").
+// The SDK exchanges the user's IDENTITY token for a fresh user signing key
+// (the /wallets/authenticate flow) and constructs the authorization
+// signature — the documented robust path for user-type quorum members.
 export async function authorizeIntentForUser(
-  token: string,
+  identityToken: string,
   intentId: string,
   input: SignatureInput,
 ): Promise<void> {
   const [signature] = await generateAuthorizationSignatures(privy(), {
-    authorizationContext: { user_jwts: [token] },
+    authorizationContext: { user_jwts: [identityToken] },
     input: {
       version: 1,
       method: input.method,

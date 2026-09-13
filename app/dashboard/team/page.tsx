@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { usePrivy } from "@privy-io/react-auth";
+import { useIdentityToken, usePrivy } from "@privy-io/react-auth";
 import { useApi } from "@/lib/client-api";
 import { useOrg } from "@/lib/dashboard-context";
 import { ROLE_LABELS } from "@/lib/types";
@@ -28,6 +28,7 @@ export default function TeamPage() {
   const { org, members, myRole, refresh } = useOrg();
   const api = useApi();
   const { user } = usePrivy();
+  const { identityToken } = useIdentityToken();
 
   const [email, setEmail] = useState("");
   const [role, setRole] = useState<MemberRole>("finance_officer");
@@ -140,10 +141,12 @@ export default function TeamPage() {
     setGovBusyId(recordId);
     setGovError(null);
     try {
-      // Signing happens server-side (JWT → user signing key exchange).
+      // Signing happens server-side (identity token → user signing key
+      // exchange).
       await api(`/api/governance/${recordId}/approve`, {
         method: "POST",
         body: JSON.stringify({}),
+        headers: { "x-privy-id-token": identityToken ?? "" },
       });
       await refresh();
       await loadGovernance();

@@ -21,6 +21,8 @@ export const POST = withAuth(async (req, userId, { params }) => {
 
   const token = getBearerToken(req);
   if (!token) return apiError('Missing session token', 401);
+  const identityToken = req.headers.get('x-privy-id-token');
+  if (!identityToken) return apiError('Missing identity token', 400);
 
   const intent = await getIntent(record.intentId);
   const intentMembers: { user_id?: string; signed_at?: number | null }[] =
@@ -32,7 +34,7 @@ export const POST = withAuth(async (req, userId, { params }) => {
   }
 
   await authorizeIntentForUser(
-    token,
+    identityToken,
     record.intentId,
     buildQuorumSignatureInput(record.quorumId, record.intentId, record.body),
   );

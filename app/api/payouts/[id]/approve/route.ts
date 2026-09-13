@@ -31,6 +31,8 @@ export const POST = withAuth(async (req, userId, { params }) => {
 
   const token = getBearerToken(req);
   if (!token) return apiError('Missing session token', 401);
+  const identityToken = req.headers.get('x-privy-id-token');
+  if (!identityToken) return apiError('Missing identity token', 400);
 
   const intent = await getIntent(payout.intentId);
   const members: { user_id?: string; signed_at?: number | null }[] =
@@ -62,10 +64,10 @@ export const POST = withAuth(async (req, userId, { params }) => {
     }
   }
 
-  // Server-side signing + authorize (JWT → user signing key exchange)
+  // Server-side signing + authorize (identity token → user signing key)
   const rpcBody = buildUsdcTransferRpc(payout.recipient, payout.amountUsdc);
   await authorizeIntentForUser(
-    token,
+    identityToken,
     payout.intentId,
     buildIntentSignatureInput(wallet?._id ?? '', payout.intentId, rpcBody),
   );
