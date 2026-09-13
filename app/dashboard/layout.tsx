@@ -11,7 +11,7 @@ import type { MemberDoc, MemberRole, OrgDoc, VendorDoc, WalletDoc } from "@/lib/
 const NAV = [
   { href: "/dashboard", label: "Overview" },
   { href: "/dashboard/payouts", label: "Payouts" },
-  { href: "/dashboard/schedules", label: "Schedules" },
+  { href: "/dashboard/schedules", label: "Automations" },
   { href: "/dashboard/vendors", label: "Vendors" },
   { href: "/dashboard/team", label: "Team" },
 ];

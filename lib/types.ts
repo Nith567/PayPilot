@@ -85,6 +85,26 @@ export interface PayoutDoc {
   createdAt: number;
 }
 
+// Condition-based automations: fire on wallet-balance triggers. The action
+// (send/notify) runs through the normal payout pipeline — policy applies to
+// automation exactly like it applies to humans.
+export interface AutomationDoc {
+  _id: string;
+  orgId: string;
+  kind: 'balance_above' | 'balance_below';
+  walletId: string; // wallet to watch
+  walletName: string;
+  thresholdUsd: number;
+  actionType: 'send' | 'notify';
+  recipient: string | null; // for send (must be an allowlisted vendor)
+  vendorName: string | null;
+  amountUsdc: number | null; // for send; null = sweep the excess above threshold
+  memo: string;
+  status: 'active' | 'paused';
+  lastFiredAt: number | null;
+  createdAt: number;
+}
+
 export type ScheduleFrequency = 'daily' | 'weekly' | 'monthly' | 'once';
 
 export interface ScheduleDoc {

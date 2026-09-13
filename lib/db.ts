@@ -1,6 +1,6 @@
 import { MongoClient, type Collection, type Db, ObjectId } from 'mongodb';
 import { requireEnv } from './env';
-import type { ActivityDoc, GovernanceDoc, MemberDoc, OrgDoc, PayoutDoc, ScheduleDoc, VendorDoc, WalletDoc } from './types';
+import type { ActivityDoc, AutomationDoc, GovernanceDoc, MemberDoc, OrgDoc, PayoutDoc, ScheduleDoc, VendorDoc, WalletDoc } from './types';
 
 // Mongo has no row-level security — every query in this app is scoped by
 // orgId, and orgId always comes from the authenticated session, never from
@@ -50,6 +50,7 @@ export const wallets = () => col<WalletDoc>('wallets');
 export const vendors = () => col<VendorDoc>('vendors');
 export const payouts = () => col<PayoutDoc>('payouts');
 export const schedules = () => col<ScheduleDoc>('schedules');
+export const automations = () => col<AutomationDoc>('automations');
 export const activity = () => col<ActivityDoc>('activity');
 export const governance = () => col<GovernanceDoc>('governance');
 

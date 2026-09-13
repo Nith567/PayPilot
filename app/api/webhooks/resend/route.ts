@@ -3,6 +3,7 @@ import { createHmac, timingSafeEqual } from 'node:crypto';
 import { optionalEnv } from '@/lib/env';
 import { orgs, vendors, logActivity } from '@/lib/db';
 import { createOrgPayout } from '@/lib/payouts';
+import { sendEmail } from '@/lib/email';
 
 // Resend inbound-email webhook — the "vendor emails an invoice" flow.
 //
@@ -79,6 +80,17 @@ export async function POST(req: NextRequest) {
       type: 'payout_denied',
       message: `Invoice email from ${vendor.name} blocked by policy: ${result.reason}`,
     });
+    void sendEmail(
+      from,
+      `PayPilot · invoice blocked: ${subject.slice(0, 80)}`,
+      `<div style="font-family:sans-serif;color:#e6edf7;background:#0b1220;padding:24px"><p>Your invoice was received but <strong>blocked by policy</strong>: ${result.reason}</p><p style="color:#8b9bb4;font-size:12px">Policy is enforced at signature time — replies to this email do not change it.</p></div>`,
+    );
+  } else {
+    void sendEmail(
+      from,
+      `PayPilot · invoice received: ${subject.slice(0, 80)}`,
+      `<div style="font-family:sans-serif;color:#e6edf7;background:#0b1220;padding:24px"><p>Your invoice for <strong>$${amountUsdc} USDC</strong> was received and is now pending approval.</p></div>`,
+    );
   }
 
   return NextResponse.json({ ok: true, payout: !!result.payout, denied: !!result.denied });

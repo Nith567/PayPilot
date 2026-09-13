@@ -11,7 +11,11 @@ export function emailEnabled(): boolean {
   return !!optionalEnv('RESEND_API_KEY');
 }
 
-async function send(to: string, subject: string, html: string): Promise<void> {
+export async function sendEmail(
+  to: string,
+  subject: string,
+  html: string,
+): Promise<void> {
   const key = optionalEnv('RESEND_API_KEY');
   if (!key) return;
   const resend = new Resend(key);
@@ -60,7 +64,7 @@ export async function sendPayoutApprovalEmails(
     <p style="margin:16px 0 0;font-size:12px;color:#8b9bb4">Or open ${link}</p>`);
   for (const email of signerEmails) {
     try {
-      await send(email, `PayPilot · approve $${opts.amountUsdc.toLocaleString()} → ${opts.vendorName}`, html);
+      await sendEmail(email, `PayPilot · approve $${opts.amountUsdc.toLocaleString()} → ${opts.vendorName}`, html);
     } catch (err) {
       console.error('[email] approval notification failed for', email, err);
     }
@@ -82,7 +86,7 @@ export async function sendGovernanceApprovalEmails(
     <p style="margin:16px 0 0;font-size:12px;color:#8b9bb4">Or open ${link}</p>`);
   for (const email of signerEmails) {
     try {
-      await send(email, `PayPilot · governance approval: ${opts.title}`, html);
+      await sendEmail(email, `PayPilot · governance approval: ${opts.title}`, html);
     } catch (err) {
       console.error('[email] governance notification failed for', email, err);
     }
