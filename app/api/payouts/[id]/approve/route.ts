@@ -26,6 +26,8 @@ export const POST = withAuth(async (req, userId, { params }) => {
 
   const token = getBearerToken(req);
   if (!token) return apiError('Missing session token', 401);
+  const origin = req.headers.get('origin') ?? process.env.NEXT_PUBLIC_APP_URL ?? '';
+  if (!origin) return apiError('Missing origin header', 400);
 
   const intent = await getIntent(payout.intentId);
   const members: { user_id?: string; signed_at?: number | null }[] =
@@ -59,7 +61,7 @@ export const POST = withAuth(async (req, userId, { params }) => {
 
   // Forward the user's access token — Privy derives their signing key and
   // records the authorization (the "wallet owner via user token" path).
-  await submitUserAuthorization(payout.intentId, token);
+  await submitUserAuthorization(payout.intentId, token, origin);
 
   // Refresh signer state from Privy and sync execution status
   const freshIntent = await getIntent(payout.intentId);

@@ -131,6 +131,7 @@ export async function submitUserSignature(
 export async function submitUserAuthorization(
   intentId: string,
   userAccessToken: string,
+  origin: string,
 ): Promise<void> {
   const res = await fetch(`${PRIVY_API_BASE}/v1/intents/${intentId}/authorize`, {
     method: 'POST',
@@ -138,6 +139,9 @@ export async function submitUserAuthorization(
       'privy-app-id': requireEnv('NEXT_PUBLIC_PRIVY_APP_ID'),
       Authorization: `Bearer ${userAccessToken}`,
       'Content-Type': 'application/json',
+      // Required for user-authenticated calls (CSRF protection) — must
+      // match an allowed domain in the Privy dashboard.
+      Origin: origin,
     },
     body: JSON.stringify({ timestamp: Date.now() }),
   });
