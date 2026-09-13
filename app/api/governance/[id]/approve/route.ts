@@ -24,6 +24,10 @@ export const POST = withAuth(async (req, userId, { params }) => {
   const origin = req.headers.get('origin') ?? process.env.NEXT_PUBLIC_APP_URL ?? '';
   if (!origin) return apiError('Missing origin header', 400);
 
+  const body = await req.json();
+  const signature = String(body?.signature ?? '');
+  if (!signature) return apiError('Missing authorization signature');
+
   const intent = await getIntent(record.intentId);
   const intentMembers: { user_id?: string; signed_at?: number | null }[] =
     intent?.authorization_details?.[0]?.members ?? [];
@@ -33,9 +37,8 @@ export const POST = withAuth(async (req, userId, { params }) => {
     return apiError('You are not a signer on this governance request', 403);
   }
 
-  // Forward the user's access token — Privy derives their signing key and
-  // records the authorization (the "wallet owner via user token" path).
-  await submitUserAuthorization(record.intentId, token, origin);
+  // Forward the user's access token + their browser-made signature.
+  await submitUserAuthorization(record.intentId, token, origin, signature);
 
   // Refresh intent state and apply app-side effects if executed
   const fresh = await getIntent(record.intentId);

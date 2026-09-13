@@ -132,6 +132,7 @@ export async function submitUserAuthorization(
   intentId: string,
   userAccessToken: string,
   origin: string,
+  signature: string,
 ): Promise<void> {
   const res = await fetch(`${PRIVY_API_BASE}/v1/intents/${intentId}/authorize`, {
     method: 'POST',
@@ -143,7 +144,7 @@ export async function submitUserAuthorization(
       // match an allowed domain in the Privy dashboard.
       Origin: origin,
     },
-    body: JSON.stringify({ timestamp: Date.now() }),
+    body: JSON.stringify({ signature, timestamp: Date.now() }),
   });
   if (!res.ok) {
     throw new Error(
