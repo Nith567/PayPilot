@@ -1,4 +1,4 @@
-import { createPrivateKey, createPublicKey } from 'node:crypto';
+import { createPrivateKey, createPublicKey, sign } from 'node:crypto';
 import { requireEnv } from './env';
 
 // The org signer key: an app-held P-256 authorization key registered in
@@ -22,4 +22,15 @@ export function getOrgSignerPublicKeyBase64(): string {
     type: 'pkcs8',
   });
   return createPublicKey(key).export({ type: 'spki', format: 'der' }).toString('base64');
+}
+
+// ECDSA P-256 / SHA-256 over the canonical payload bytes; base64 of the DER
+// signature — Privy's authorization-signature format.
+export function orgSignerSignPayload(bytes: Uint8Array): string {
+  const key = createPrivateKey({
+    key: Buffer.from(getOrgSignerPrivateKeyBase64(), 'base64'),
+    format: 'der',
+    type: 'pkcs8',
+  });
+  return sign('sha256', Buffer.from(bytes), { key, dsaEncoding: 'der' }).toString('base64');
 }

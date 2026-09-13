@@ -1,9 +1,9 @@
-import { generateAuthorizationSignatures } from '@privy-io/node';
+import canonicalize from 'canonicalize';
 import { encodeFunctionData } from 'viem';
 import { getChain } from './chain';
-import { PRIVY_API_BASE, privy, privyFetch } from './privy';
+import { PRIVY_API_BASE, privyFetch } from './privy';
 import { requireEnv } from './env';
-import { getOrgSignerPrivateKeyBase64 } from './app-signer';
+import { orgSignerSignPayload } from './app-signer';
 
 // USDC transfer() — used for calldata encoding and by the policy's
 // ethereum_calldata conditions (the policy decodes args against this ABI).
@@ -127,26 +127,26 @@ export async function submitUserSignature(
 // the docs describe as automatic signature headers). This avoids the manual
 // authorization-signature path entirely.
 // Sign the intent's authorization server-side with the org signer key and
-// submit it. This is the documented intent-approval path: authorization
-// keys sign the intent's underlying request payload; the app only does this
-// after an authenticated org member with an approve role clicked and the
-// policy gates passed.
+// submit it. The intent-approval payload binds the intent:
+// canonicalize({version, method, url, headers, body, intent_id}) — the
+// intent_id binding matches the client SDK's GenerateAuthorizationSignatureInput
+// ("Intent ID binding this signature to a specific intent"). The app only
+// signs after an authenticated org member with an approve role clicked and
+// the policy gates passed.
 export async function authorizeIntentWithOrgSigner(
   intentId: string,
   input: SignatureInput,
 ): Promise<void> {
-  const [signature] = await generateAuthorizationSignatures(privy(), {
-    authorizationContext: {
-      authorization_private_keys: [getOrgSignerPrivateKeyBase64()],
-    },
-    input: {
-      version: 1,
-      method: input.method,
-      url: input.url,
-      body: input.body,
-      headers: input.headers,
-    },
+  const payload = canonicalize({
+    version: 1,
+    method: input.method,
+    url: input.url,
+    headers: input.headers,
+    body: input.body,
+    intent_id: intentId,
   });
+  if (!payload) throw new Error('Failed to canonicalize intent payload');
+  const signature = orgSignerSignPayload(new TextEncoder().encode(payload));
 
   const res = await privyFetch(`/v1/intents/${intentId}/authorize`, {
     method: 'POST',
