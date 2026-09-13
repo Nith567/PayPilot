@@ -62,12 +62,18 @@ export default function PayoutDetailPage() {
     setBusy(true);
     setError(null);
     try {
-      // Browser signs the intent-bound request with the user's key; the
-      // server forwards it together with the user's session token.
-      const { signature } = await generateAuthorizationSignature(signatureInput);
+      // One timestamp binds the signed payload and the authorize call —
+      // Privy reconstructs the payload with the authorize timestamp, so
+      // they must be identical.
+      // eslint-disable-next-line react-hooks/purity
+      const timestamp = Date.now();
+      const { signature } = await generateAuthorizationSignature({
+        ...signatureInput,
+        timestamp,
+      });
       const data = await api(`/api/payouts/${id}/approve`, {
         method: "POST",
-        body: JSON.stringify({ signature }),
+        body: JSON.stringify({ signature, timestamp }),
       });
       setPayout(data.payout);
       load();

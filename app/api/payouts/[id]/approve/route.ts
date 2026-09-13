@@ -32,6 +32,7 @@ export const POST = withAuth(async (req, userId, { params }) => {
   const body = await req.json();
   const signature = String(body?.signature ?? '');
   if (!signature) return apiError('Missing authorization signature');
+  const timestamp = body?.timestamp ? Number(body.timestamp) : Date.now();
 
   const intent = await getIntent(payout.intentId);
   const members: { user_id?: string; signed_at?: number | null }[] =
@@ -65,8 +66,9 @@ export const POST = withAuth(async (req, userId, { params }) => {
 
   // Forward the user's access token + their browser-made signature —
   // Privy validates the signature against the user's key (the "wallet
-  // owner via user token" path).
-  await submitUserAuthorization(payout.intentId, token, origin, signature);
+  // owner via user token" path). The timestamp must match the one the
+  // client signed with.
+  await submitUserAuthorization(payout.intentId, token, origin, signature, timestamp);
 
   // Refresh signer state from Privy and sync execution status
   const freshIntent = await getIntent(payout.intentId);

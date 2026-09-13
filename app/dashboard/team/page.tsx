@@ -143,10 +143,15 @@ export default function TeamPage() {
     try {
       const { signatureInput } = await api(`/api/governance/${recordId}`);
       if (!signatureInput) throw new Error("Nothing to sign");
-      const { signature } = await generateAuthorizationSignature(signatureInput);
+      // eslint-disable-next-line react-hooks/purity
+      const timestamp = Date.now();
+      const { signature } = await generateAuthorizationSignature({
+        ...signatureInput,
+        timestamp,
+      });
       await api(`/api/governance/${recordId}/approve`, {
         method: "POST",
-        body: JSON.stringify({ signature }),
+        body: JSON.stringify({ signature, timestamp }),
       });
       await refresh();
       await loadGovernance();

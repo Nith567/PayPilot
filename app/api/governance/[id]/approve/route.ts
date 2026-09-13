@@ -27,6 +27,7 @@ export const POST = withAuth(async (req, userId, { params }) => {
   const body = await req.json();
   const signature = String(body?.signature ?? '');
   if (!signature) return apiError('Missing authorization signature');
+  const timestamp = body?.timestamp ? Number(body.timestamp) : Date.now();
 
   const intent = await getIntent(record.intentId);
   const intentMembers: { user_id?: string; signed_at?: number | null }[] =
@@ -37,8 +38,9 @@ export const POST = withAuth(async (req, userId, { params }) => {
     return apiError('You are not a signer on this governance request', 403);
   }
 
-  // Forward the user's access token + their browser-made signature.
-  await submitUserAuthorization(record.intentId, token, origin, signature);
+  // Forward the user's access token + their browser-made signature. The
+  // timestamp must match the one the client signed with.
+  await submitUserAuthorization(record.intentId, token, origin, signature, timestamp);
 
   // Refresh intent state and apply app-side effects if executed
   const fresh = await getIntent(record.intentId);
