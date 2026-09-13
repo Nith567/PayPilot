@@ -141,16 +141,12 @@ export default function TeamPage() {
     setGovBusyId(recordId);
     setGovError(null);
     try {
-      const { signaturePayloadBase64 } = await api(`/api/governance/${recordId}`);
-      if (!signaturePayloadBase64) throw new Error("Nothing to sign");
-      const bytes = Uint8Array.from(atob(signaturePayloadBase64), (c) => c.charCodeAt(0));
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const result: any = await generateAuthorizationSignature(bytes);
-      const signature = typeof result === "string" ? result : result?.signature ?? result;
-      const timestamp = result && typeof result === "object" ? result.timestamp : undefined;
+      const { signatureInput } = await api(`/api/governance/${recordId}`);
+      if (!signatureInput) throw new Error("Nothing to sign");
+      const { signature } = await generateAuthorizationSignature(signatureInput);
       await api(`/api/governance/${recordId}/approve`, {
         method: "POST",
-        body: JSON.stringify({ signature, timestamp }),
+        body: JSON.stringify({ signature }),
       });
       await refresh();
       await loadGovernance();

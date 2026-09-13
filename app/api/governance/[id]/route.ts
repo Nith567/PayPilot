@@ -1,10 +1,10 @@
 import { apiError, json, withAuth } from '@/lib/api-helpers';
 import { resolveMembershipForUser } from '@/lib/authz';
 import { governance } from '@/lib/db';
-import { buildQuorumSignaturePayload, toBase64 } from '@/lib/intent-sign';
+import { buildQuorumSignatureInput } from '@/lib/intent-sign';
 
-// Governance request detail: the base64 signature payload (the underlying
-// key-quorum PATCH) the browser must sign with useAuthorizationSignature().
+// Governance request detail: the structured signing input (the underlying
+// key-quorum PATCH, intent-bound) for useAuthorizationSignature().
 export const GET = withAuth(async (_req, userId, { params }) => {
   const { id } = await params;
   const m = await resolveMembershipForUser(userId);
@@ -13,10 +13,10 @@ export const GET = withAuth(async (_req, userId, { params }) => {
   const record = await (await governance()).findOne({ _id: id, orgId: m.org._id });
   if (!record) return apiError('Governance request not found', 404);
 
-  const signaturePayloadBase64 =
+  const signatureInput =
     record.status === 'pending'
-      ? toBase64(buildQuorumSignaturePayload(record.quorumId, record.body))
+      ? buildQuorumSignatureInput(record.quorumId, record.intentId, record.body)
       : null;
 
-  return json({ governance: record, signaturePayloadBase64 });
+  return json({ governance: record, signatureInput });
 });

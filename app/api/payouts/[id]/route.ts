@@ -2,10 +2,10 @@ import { apiError, json, withAuth } from '@/lib/api-helpers';
 import { resolveMembershipForUser } from '@/lib/authz';
 import { payouts, wallets } from '@/lib/db';
 import { syncPayoutStatus } from '@/lib/payouts';
-import { buildIntentSignaturePayload, buildUsdcTransferRpc, getIntent, toBase64 } from '@/lib/intent-sign';
+import { buildIntentSignatureInput, buildUsdcTransferRpc, getIntent, type SignatureInput } from '@/lib/intent-sign';
 
 // Payout detail: synced status + intent approval state + (while pending) the
-// base64 signature payload the browser must sign with useAuthorizationSignature().
+// structured signing input the browser passes to useAuthorizationSignature().
 export const GET = withAuth(async (_req, userId, { params }) => {
   const { id } = await params;
   const m = await resolveMembershipForUser(userId);
@@ -17,7 +17,7 @@ export const GET = withAuth(async (_req, userId, { params }) => {
   const fresh = await syncPayoutStatus(payout);
 
   let intent: Record<string, unknown> | null = null;
-  let signaturePayloadBase64: string | null = null;
+  let signatureInput: SignatureInput | null = null;
 
   if (fresh.intentId) {
     const raw = await getIntent(fresh.intentId);
@@ -37,10 +37,10 @@ export const GET = withAuth(async (_req, userId, { params }) => {
       const wallet = await (await wallets()).findOne({ _id: fresh.walletId });
       if (wallet) {
         const rpcBody = buildUsdcTransferRpc(fresh.recipient, fresh.amountUsdc);
-        signaturePayloadBase64 = toBase64(buildIntentSignaturePayload(wallet._id, rpcBody));
+        signatureInput = buildIntentSignatureInput(wallet._id, fresh.intentId, rpcBody);
       }
     }
   }
 
-  return json({ payout: fresh, intent, signaturePayloadBase64 });
+  return json({ payout: fresh, intent, signatureInput });
 });

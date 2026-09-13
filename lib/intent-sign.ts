@@ -1,4 +1,3 @@
-import { formatRequestForAuthorizationSignature } from '@privy-io/node';
 import { encodeFunctionData } from 'viem';
 import { getChain } from './chain';
 import { PRIVY_API_BASE, privyFetch } from './privy';
@@ -49,41 +48,50 @@ export function buildUsdcTransferRpc(recipient: string, amountUsdc: number) {
   };
 }
 
-// The canonicalized bytes every approver signs — Privy's own formatter.
-// The server base64s these to the browser; approvers sign with
-// useAuthorizationSignature().
-export function buildSignaturePayload(
-  method: 'POST' | 'PUT' | 'PATCH' | 'DELETE',
-  url: string,
-  body: Record<string, unknown>,
-): Uint8Array {
-  return formatRequestForAuthorizationSignature({
-    version: 1,
-    url,
-    method,
-    headers: { 'privy-app-id': requireEnv('NEXT_PUBLIC_PRIVY_APP_ID') },
-    body,
-  });
+// The structured signing input every approver signs. Approvers pass this
+// object directly to useAuthorizationSignature().generateAuthorizationSignature()
+// — Privy's client hook canonicalizes it. The intent_id binding is REQUIRED:
+// without it, Privy cannot map the signature to a valid authorization key
+// ("No valid authorization key found for signature").
+export interface SignatureInput {
+  version: 1;
+  method: 'POST' | 'PUT' | 'PATCH' | 'DELETE';
+  url: string;
+  body: Record<string, unknown>;
+  headers: { 'privy-app-id': string };
+  intent_id: string;
 }
 
 // Payout intents: the underlying wallet RPC request.
-export function buildIntentSignaturePayload(
+export function buildIntentSignatureInput(
   walletId: string,
+  intentId: string,
   rpcBody: Record<string, unknown>,
-): Uint8Array {
-  return buildSignaturePayload('POST', `${PRIVY_API_BASE}/v1/wallets/${walletId}/rpc`, rpcBody);
+): SignatureInput {
+  return {
+    version: 1,
+    method: 'POST',
+    url: `${PRIVY_API_BASE}/v1/wallets/${walletId}/rpc`,
+    body: rpcBody,
+    headers: { 'privy-app-id': requireEnv('NEXT_PUBLIC_PRIVY_APP_ID') },
+    intent_id: intentId,
+  };
 }
 
 // Governance intents: the underlying key-quorum PATCH.
-export function buildQuorumSignaturePayload(
+export function buildQuorumSignatureInput(
   quorumId: string,
+  intentId: string,
   body: Record<string, unknown>,
-): Uint8Array {
-  return buildSignaturePayload('PATCH', `${PRIVY_API_BASE}/v1/key_quorums/${quorumId}`, body);
-}
-
-export function toBase64(bytes: Uint8Array): string {
-  return Buffer.from(bytes).toString('base64');
+): SignatureInput {
+  return {
+    version: 1,
+    method: 'PATCH',
+    url: `${PRIVY_API_BASE}/v1/key_quorums/${quorumId}`,
+    body,
+    headers: { 'privy-app-id': requireEnv('NEXT_PUBLIC_PRIVY_APP_ID') },
+    intent_id: intentId,
+  };
 }
 
 // Fetch an intent by id. The node SDK has intent *creators* (rpc, updateKeyQuorum,

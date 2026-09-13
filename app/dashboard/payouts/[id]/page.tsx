@@ -29,7 +29,8 @@ export default function PayoutDetailPage() {
 
   const [payout, setPayout] = useState<PayoutDoc | null>(null);
   const [intent, setIntent] = useState<IntentInfo | null>(null);
-  const [payload, setPayload] = useState<string | null>(null);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const [signatureInput, setSignatureInput] = useState<any>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -38,7 +39,7 @@ export default function PayoutDetailPage() {
       const data = await api(`/api/payouts/${id}`);
       setPayout(data.payout);
       setIntent(data.intent);
-      setPayload(data.signaturePayloadBase64);
+      setSignatureInput(data.signatureInput ?? null);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load payout");
     }
@@ -57,24 +58,18 @@ export default function PayoutDetailPage() {
   }, [load, payout?.status]);
 
   const approve = async () => {
-    if (!payload) return;
+    if (!signatureInput) return;
     setBusy(true);
     setError(null);
     try {
-      // Sign the intent's underlying request payload with the user's
-      // authorization key (Privy embedded wallet signing) — the browser
-      // produces the ECDSA P-256 signature, the server submits it to Privy.
-      const bytes = Uint8Array.from(atob(payload), (c) => c.charCodeAt(0));
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const result: any = await generateAuthorizationSignature(bytes);
-      const signature =
-        typeof result === "string" ? result : result?.signature ?? result;
-      const timestamp =
-        result && typeof result === "object" ? result.timestamp : undefined;
+      // Sign the intent-bound request input with the user's authorization
+      // key — Privy's hook canonicalizes the structured input (including
+      // the intent_id binding) and returns the ECDSA P-256 signature.
+      const { signature } = await generateAuthorizationSignature(signatureInput);
 
       const data = await api(`/api/payouts/${id}/approve`, {
         method: "POST",
-        body: JSON.stringify({ signature, timestamp }),
+        body: JSON.stringify({ signature }),
       });
       setPayout(data.payout);
       load();
@@ -201,7 +196,7 @@ export default function PayoutDetailPage() {
             ) : null}
             <Button
               onClick={approve}
-              disabled={busy || !payload || userSigned}
+              disabled={busy || !signatureInput || userSigned}
               className="w-full"
             >
               {busy
