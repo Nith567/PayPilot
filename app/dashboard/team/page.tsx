@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { useAuthorizationSignature, usePrivy } from "@privy-io/react-auth";
+import { usePrivy } from "@privy-io/react-auth";
 import { useApi } from "@/lib/client-api";
 import { useOrg } from "@/lib/dashboard-context";
 import { ROLE_LABELS } from "@/lib/types";
@@ -28,7 +28,6 @@ export default function TeamPage() {
   const { org, members, myRole, refresh } = useOrg();
   const api = useApi();
   const { user } = usePrivy();
-  const { generateAuthorizationSignature } = useAuthorizationSignature();
 
   const [email, setEmail] = useState("");
   const [role, setRole] = useState<MemberRole>("finance_officer");
@@ -141,17 +140,10 @@ export default function TeamPage() {
     setGovBusyId(recordId);
     setGovError(null);
     try {
-      const { signatureInput } = await api(`/api/governance/${recordId}`);
-      if (!signatureInput) throw new Error("Nothing to sign");
-      // eslint-disable-next-line react-hooks/purity
-      const timestamp = Date.now();
-      const { signature } = await generateAuthorizationSignature({
-        ...signatureInput,
-        timestamp,
-      });
+      // The server signs with the org signer key after verifying your role.
       await api(`/api/governance/${recordId}/approve`, {
         method: "POST",
-        body: JSON.stringify({ signature, timestamp }),
+        body: JSON.stringify({}),
       });
       await refresh();
       await loadGovernance();

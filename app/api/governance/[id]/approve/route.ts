@@ -1,8 +1,7 @@
 import { apiError, json, withAuth } from '@/lib/api-helpers';
-import { getBearerToken } from '@/lib/auth';
 import { resolveMembershipForUser } from '@/lib/authz';
 import { governance, members, orgs } from '@/lib/db';
-import { getIntent, submitUserAuthorization } from '@/lib/intent-sign';
+import { authorizeIntentWithOrgSigner, buildQuorumSignatureInput, getIntent } from '@/lib/intent-sign';
 import type { GovernanceDoc } from '@/lib/types';
 
 // A quorum member approves a governance request. Signing is server-side:
@@ -19,16 +18,6 @@ export const POST = withAuth(async (req, userId, { params }) => {
   if (!record) return apiError('Governance request not found', 404);
   if (record.status !== 'pending') return apiError('Request is not pending', 409);
 
-  const token = getBearerToken(req);
-  if (!token) return apiError('Missing session token', 401);
-  const origin = req.headers.get('origin') ?? process.env.NEXT_PUBLIC_APP_URL ?? '';
-  if (!origin) return apiError('Missing origin header', 400);
-
-  const body = await req.json();
-  const signature = String(body?.signature ?? '');
-  if (!signature) return apiError('Missing authorization signature');
-  const timestamp = body?.timestamp ? Number(body.timestamp) : Date.now();
-
   const intent = await getIntent(record.intentId);
   const intentMembers: { user_id?: string; signed_at?: number | null }[] =
     intent?.authorization_details?.[0]?.members ?? [];
@@ -38,9 +27,11 @@ export const POST = withAuth(async (req, userId, { params }) => {
     return apiError('You are not a signer on this governance request', 403);
   }
 
-  // Forward the user's access token + their browser-made signature. The
-  // timestamp must match the one the client signed with.
-  await submitUserAuthorization(record.intentId, token, origin, signature, timestamp);
+  // Org signer key signs the quorum-mutation intent's underlying request.
+  await authorizeIntentWithOrgSigner(
+    record.intentId,
+    buildQuorumSignatureInput(record.quorumId, record.body),
+  );
 
   // Refresh intent state and apply app-side effects if executed
   const fresh = await getIntent(record.intentId);

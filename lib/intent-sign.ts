@@ -1,7 +1,9 @@
+import { generateAuthorizationSignatures } from '@privy-io/node';
 import { encodeFunctionData } from 'viem';
 import { getChain } from './chain';
-import { PRIVY_API_BASE, privyFetch } from './privy';
+import { PRIVY_API_BASE, privy, privyFetch } from './privy';
 import { requireEnv } from './env';
+import { getOrgSignerPrivateKeyBase64 } from './app-signer';
 
 // USDC transfer() — used for calldata encoding and by the policy's
 // ethereum_calldata conditions (the policy decodes args against this ABI).
@@ -124,24 +126,31 @@ export async function submitUserSignature(
 // case Privy derives the user's signing key automatically (the SDK behavior
 // the docs describe as automatic signature headers). This avoids the manual
 // authorization-signature path entirely.
-export async function submitUserAuthorization(
+// Sign the intent's authorization server-side with the org signer key and
+// submit it. This is the documented intent-approval path: authorization
+// keys sign the intent's underlying request payload; the app only does this
+// after an authenticated org member with an approve role clicked and the
+// policy gates passed.
+export async function authorizeIntentWithOrgSigner(
   intentId: string,
-  userAccessToken: string,
-  origin: string,
-  signature: string,
-  timestamp: number,
+  input: SignatureInput,
 ): Promise<void> {
-  const res = await fetch(`${PRIVY_API_BASE}/v1/intents/${intentId}/authorize`, {
-    method: 'POST',
-    headers: {
-      'privy-app-id': requireEnv('NEXT_PUBLIC_PRIVY_APP_ID'),
-      Authorization: `Bearer ${userAccessToken}`,
-      'Content-Type': 'application/json',
-      // Required for user-authenticated calls (CSRF protection) — must
-      // match an allowed domain in the Privy dashboard.
-      Origin: origin,
+  const [signature] = await generateAuthorizationSignatures(privy(), {
+    authorizationContext: {
+      authorization_private_keys: [getOrgSignerPrivateKeyBase64()],
     },
-    body: JSON.stringify({ signature, timestamp }),
+    input: {
+      version: 1,
+      method: input.method,
+      url: input.url,
+      body: input.body,
+      headers: input.headers,
+    },
+  });
+
+  const res = await privyFetch(`/v1/intents/${intentId}/authorize`, {
+    method: 'POST',
+    body: JSON.stringify({ signature, timestamp: Date.now() }),
   });
   if (!res.ok) {
     throw new Error(

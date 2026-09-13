@@ -1,4 +1,5 @@
 import { privy } from './privy';
+import { getOrgSignerPublicKeyBase64 } from './app-signer';
 import { logActivity, members, newId, orgs, wallets } from './db';
 import {
   DEFAULT_TIER_USD,
@@ -23,16 +24,21 @@ export async function createOrgForUser(
   userId: string,
   { name }: { name: string },
 ): Promise<{ org: OrgDoc; wallets: WalletDoc[] }> {
-  // 1) Key quorums — main (governs Treasury etc.) + ops (governs small payouts)
+  // 1) Key quorums — main (governs Treasury etc.) + ops (governs small payouts).
+  // Members: the org owner (human, RBAC-decides) + the app-held org signer
+  // key (produces the intent authorization signatures). Threshold 1.
+  const signerPublicKey = getOrgSignerPublicKeyBase64();
   const mainQuorum = await privy().keyQuorums().create({
     display_name: `${name} main quorum`,
     user_ids: [userId],
-    authorization_threshold: 1, // owner alone until members join
+    public_keys: [signerPublicKey],
+    authorization_threshold: 1,
   });
   const opsQuorum = await privy().keyQuorums().create({
     display_name: `${name} ops quorum`,
     user_ids: [userId],
-    authorization_threshold: 1, // single approver for small payouts
+    public_keys: [signerPublicKey],
+    authorization_threshold: 1,
   });
 
   // 2) Organization

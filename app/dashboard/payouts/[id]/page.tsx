@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useParams } from "next/navigation";
-import { useAuthorizationSignature } from "@privy-io/react-auth";
 import { useApi } from "@/lib/client-api";
 import { txUrl } from "@/lib/chain";
 import { Badge, Button, Card, StatusChip } from "@/app/ui";
@@ -25,12 +24,9 @@ export default function PayoutDetailPage() {
   const params = useParams<{ id: string }>();
   const id = params.id;
   const api = useApi();
-  const { generateAuthorizationSignature } = useAuthorizationSignature();
 
   const [payout, setPayout] = useState<PayoutDoc | null>(null);
   const [intent, setIntent] = useState<IntentInfo | null>(null);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [signatureInput, setSignatureInput] = useState<any>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -39,7 +35,6 @@ export default function PayoutDetailPage() {
       const data = await api(`/api/payouts/${id}`);
       setPayout(data.payout);
       setIntent(data.intent);
-      setSignatureInput(data.signatureInput ?? null);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load payout");
     }
@@ -58,22 +53,14 @@ export default function PayoutDetailPage() {
   }, [load, payout?.status]);
 
   const approve = async () => {
-    if (!signatureInput) return;
     setBusy(true);
     setError(null);
     try {
-      // One timestamp binds the signed payload and the authorize call —
-      // Privy reconstructs the payload with the authorize timestamp, so
-      // they must be identical.
-      // eslint-disable-next-line react-hooks/purity
-      const timestamp = Date.now();
-      const { signature } = await generateAuthorizationSignature({
-        ...signatureInput,
-        timestamp,
-      });
+      // The server signs with the org signer key after verifying your role
+      // and the policy gates.
       const data = await api(`/api/payouts/${id}/approve`, {
         method: "POST",
-        body: JSON.stringify({ signature, timestamp }),
+        body: JSON.stringify({}),
       });
       setPayout(data.payout);
       load();
@@ -200,7 +187,6 @@ export default function PayoutDetailPage() {
             ) : null}
             <Button
               onClick={approve}
-              disabled={busy || !signatureInput || userSigned}
               className="w-full"
             >
               {busy ? "Signing…" : userSigned ? "Signed ✓" : "Approve & sign"}

@@ -1,4 +1,5 @@
 import { privy } from './privy';
+import { getOrgSignerPrivateKeyBase64 } from './app-signer';
 import { governance, logActivity, newId } from './db';
 import type { GovernanceDoc } from './types';
 
@@ -21,8 +22,11 @@ export async function mutateQuorum(
   input: QuorumMutationInput,
 ): Promise<{ direct: boolean; intentId?: string }> {
   if (input.currentThreshold <= 1) {
+    // Threshold 1: the org signer key alone satisfies the quorum update.
     await privy().keyQuorums().update(input.quorumId, {
-      authorization_context: { user_jwts: [input.ownerToken] },
+      authorization_context: {
+        authorization_private_keys: [getOrgSignerPrivateKeyBase64()],
+      },
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       ...(input.body as any),
     });

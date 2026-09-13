@@ -1,6 +1,7 @@
 import { apiError, json, withAuth } from '@/lib/api-helpers';
 import { getBearerToken } from '@/lib/auth';
 import { resolveMembershipForUser, assertCan } from '@/lib/authz';
+import { getOrgSignerPrivateKeyBase64 } from '@/lib/app-signer';
 import { privy } from '@/lib/privy';
 import { mutateQuorum } from '@/lib/governance';
 import { logActivity, members } from '@/lib/db';
@@ -32,14 +33,17 @@ export const POST = withAuth(async (req, userId, { params }) => {
   const token = getBearerToken(req);
   if (!token) return apiError('Missing session token', 401);
 
-  // 1) Ops quorum (threshold 1) — immediate, owner-signed
+  // 1) Ops quorum (threshold 1) — immediate, signed by the org signer key
   const opsQuorum = await privy().keyQuorums().get(m.org.opsQuorumId);
   const opsUserIds = [...(opsQuorum.user_ids ?? [])];
   if (!opsUserIds.includes(member.privyUserId)) {
     opsUserIds.push(member.privyUserId);
     await privy().keyQuorums().update(m.org.opsQuorumId, {
-      authorization_context: { user_jwts: [token] },
+      authorization_context: {
+        authorization_private_keys: [getOrgSignerPrivateKeyBase64()],
+      },
       user_ids: opsUserIds,
+      public_keys: (opsQuorum.authorization_keys ?? []).map((k) => k.public_key),
       key_quorum_ids: opsQuorum.key_quorum_ids,
       authorization_threshold: opsQuorum.authorization_threshold ?? 1,
     });
