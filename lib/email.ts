@@ -18,6 +18,7 @@ export async function getReceivedEmail(emailId: string): Promise<any> {
   const key = optionalEnv('RESEND_API_KEY');
   if (!key) throw new Error('RESEND_API_KEY is not configured');
   const resend = new Resend(key);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const result: any = await resend.emails.receiving.get(emailId);
   // The SDK wraps responses as { data: Email } — unwrap defensively.
   return result?.data ?? result;
