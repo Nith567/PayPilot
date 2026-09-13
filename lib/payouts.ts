@@ -155,9 +155,19 @@ export async function syncPayoutStatus(payout: PayoutDoc): Promise<PayoutDoc> {
   } else if (privyStatus === 'failed') {
     status = 'failed';
     if (!payout.deniedReason) {
+      // Surface the real execution error (e.g. "Gas sponsorship is not
+      // enabled.") instead of a generic message.
+      const privyError: string | null =
+        intent?.action_result?.response_body?.error ?? null;
       await (await payouts()).updateOne(
         { _id: payout._id },
-        { $set: { deniedReason: 'Privy rejected the transaction (policy or execution error)' } },
+        {
+          $set: {
+            deniedReason:
+              privyError ??
+              'Privy rejected the transaction (policy or execution error)',
+          },
+        },
       );
     }
   }

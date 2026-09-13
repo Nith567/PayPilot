@@ -118,15 +118,22 @@ export default function PayoutDetailPage() {
 
       {payout.deniedReason && payout.status !== "executed" ? (
         <div className="rounded-xl border border-rose-500/40 bg-rose-500/10 px-5 py-4">
-          <p className="font-semibold text-rose-300">DENIED BY POLICY</p>
+          <p className="font-semibold text-rose-300">REJECTED</p>
           <p className="mt-1 text-sm text-rose-200/80">
             {payout.deniedReason}
           </p>
-          <p className="mt-2 text-xs text-rose-200/60">
-            The Privy policy on this wallet evaluates every signature request —
-            allowlist, caps, chain — inside the signing enclave. Even a fully
-            signed payout is denied before it can broadcast.
-          </p>
+          {payout.deniedReason.includes("Gas sponsorship") ? (
+            <p className="mt-2 text-xs text-rose-200/60">
+              Enable gas sponsorship in the Privy dashboard (Gas sponsorship →
+              App pays → tick Base Sepolia), then create a new payout.
+            </p>
+          ) : (
+            <p className="mt-2 text-xs text-rose-200/60">
+              The Privy policy on this wallet evaluates every signature request —
+              allowlist, caps, chain — inside the signing enclave. Even a fully
+              signed payout is denied before it can broadcast.
+            </p>
+          )}
         </div>
       ) : null}
 
@@ -170,8 +177,10 @@ export default function PayoutDetailPage() {
                 </div>
                 {signed ? (
                   <span className="text-sm text-emerald-300">✓ signed</span>
-                ) : (
+                ) : payout.status === "pending" ? (
                   <span className="text-sm text-muted">awaiting signature</span>
+                ) : (
+                  <span className="text-sm text-muted">not required</span>
                 )}
               </div>
             );
