@@ -4,8 +4,6 @@ import { payouts, wallets } from '@/lib/db';
 import { checkPolicyGates, syncPayoutStatus } from '@/lib/payouts';
 import {
   authorizeIntentWithOrgSigner,
-  buildIntentSignatureInput,
-  buildUsdcTransferRpc,
   getIntent,
 } from '@/lib/intent-sign';
 
@@ -41,13 +39,9 @@ export const POST = withAuth(async (_req, userId, { params }) => {
     );
   }
 
-  // Org signer key signs the intent's underlying request; Privy executes
+  // Org signer key signs the intent's stored request; Privy executes
   // once the quorum threshold is met.
-  const rpcBody = buildUsdcTransferRpc(payout.recipient, payout.amountUsdc);
-  await authorizeIntentWithOrgSigner(
-    payout.intentId,
-    buildIntentSignatureInput(wallet._id, rpcBody),
-  );
+  await authorizeIntentWithOrgSigner(payout.intentId);
 
   // Refresh signer state from Privy and sync execution status
   const freshIntent = await getIntent(payout.intentId);

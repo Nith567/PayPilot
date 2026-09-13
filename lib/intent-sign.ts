@@ -103,46 +103,30 @@ export async function getIntent(intentId: string): Promise<any> {
   return res.json();
 }
 
-// Submit a browser-made authorization signature (useAuthorizationSignature)
-// to the intent authorize endpoint. One signature per call; Privy executes
-// automatically once the quorum threshold is met.
-export async function submitUserSignature(
-  intentId: string,
-  signature: string,
-): Promise<void> {
-  const res = await privyFetch(`/v1/intents/${intentId}/authorize`, {
-    method: 'POST',
-    body: JSON.stringify({ signature, timestamp: Date.now() }),
-  });
-  if (!res.ok) {
-    throw new Error(
-      `Privy rejected the signature: ${await res.text()}`,
-    );
-  }
-}
-
-// Authorize an intent by forwarding the USER'S access token to Privy —
-// the endpoint is "callable by the wallet owner (via user token)", in which
-// case Privy derives the user's signing key automatically (the SDK behavior
-// the docs describe as automatic signature headers). This avoids the manual
-// authorization-signature path entirely.
-// Sign the intent's authorization server-side with the org signer key and
-// submit it. The intent-approval payload binds the intent:
-// canonicalize({version, method, url, headers, body, intent_id}) — the
-// intent_id binding matches the client SDK's GenerateAuthorizationSignatureInput
-// ("Intent ID binding this signature to a specific intent"). The app only
-// signs after an authenticated org member with an approve role clicked and
-// the policy gates passed.
-export async function authorizeIntentWithOrgSigner(
-  intentId: string,
-  input: SignatureInput,
-): Promise<void> {
+// Authorize an intent with the org signer key. The signed payload mirrors
+// Privy's own SDK construction (PrivyIntentsService.authorize in the Java
+// SDK): {version, method, url, body, headers, timestamp, intent_id} built
+// from the intent's stored request_details — canonicalized, sha256, P-256
+// DER. The timestamp is captured once and used in both the payload and the
+// authorize body. headers include privy-request-expiry = expires_at when the
+// intent has a custom expiry. The app only signs after an authenticated org
+// member with an approve role clicked and the policy gates passed.
+export async function authorizeIntentWithOrgSigner(intentId: string): Promise<void> {
+  const intent = await getIntent(intentId);
+  const rd = intent.request_details as { method: string; url: string; body: Record<string, unknown> };
+  const now = Date.now();
   const payload = canonicalize({
     version: 1,
-    method: input.method,
-    url: input.url,
-    headers: input.headers,
-    body: input.body,
+    method: rd.method,
+    url: rd.url,
+    body: rd.body,
+    headers: {
+      'privy-app-id': requireEnv('NEXT_PUBLIC_PRIVY_APP_ID'),
+      ...(intent.custom_expiry
+        ? { 'privy-request-expiry': String(Math.trunc(intent.expires_at)) }
+        : {}),
+    },
+    timestamp: now,
     intent_id: intentId,
   });
   if (!payload) throw new Error('Failed to canonicalize intent payload');
@@ -150,7 +134,7 @@ export async function authorizeIntentWithOrgSigner(
 
   const res = await privyFetch(`/v1/intents/${intentId}/authorize`, {
     method: 'POST',
-    body: JSON.stringify({ signature, timestamp: Date.now() }),
+    body: JSON.stringify({ signature, timestamp: now }),
   });
   if (!res.ok) {
     throw new Error(

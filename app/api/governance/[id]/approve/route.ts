@@ -1,7 +1,7 @@
 import { apiError, json, withAuth } from '@/lib/api-helpers';
 import { resolveMembershipForUser } from '@/lib/authz';
 import { governance, members, orgs } from '@/lib/db';
-import { authorizeIntentWithOrgSigner, buildQuorumSignatureInput, getIntent } from '@/lib/intent-sign';
+import { authorizeIntentWithOrgSigner, getIntent } from '@/lib/intent-sign';
 import type { GovernanceDoc } from '@/lib/types';
 
 // A quorum member approves a governance request. Signing is server-side:
@@ -27,11 +27,8 @@ export const POST = withAuth(async (req, userId, { params }) => {
     return apiError('You are not a signer on this governance request', 403);
   }
 
-  // Org signer key signs the quorum-mutation intent's underlying request.
-  await authorizeIntentWithOrgSigner(
-    record.intentId,
-    buildQuorumSignatureInput(record.quorumId, record.body),
-  );
+  // Org signer key signs the quorum-mutation intent's stored request.
+  await authorizeIntentWithOrgSigner(record.intentId);
 
   // Refresh intent state and apply app-side effects if executed
   const fresh = await getIntent(record.intentId);
