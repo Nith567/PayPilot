@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { usePrivy } from "@privy-io/react-auth";
+import { usePrivy, useAuthorizationSignature } from "@privy-io/react-auth";
 import { useApi } from "@/lib/client-api";
 import { useOrg } from "@/lib/dashboard-context";
 import { ROLE_LABELS } from "@/lib/types";
@@ -22,12 +22,22 @@ interface GovernanceRow {
   intentStatus: string;
   threshold: number | null;
   members: { name: string; signedAt: number | null }[];
+  iSigned: boolean;
+  signatureInput: {
+    version: 1;
+    method: "POST" | "PUT" | "PATCH" | "DELETE";
+    url: string;
+    body: Record<string, unknown>;
+    headers: { "privy-app-id": string; "privy-request-expiry"?: string };
+    intent_id: string;
+  } | null;
 }
 
 export default function TeamPage() {
   const { org, members, myRole, refresh } = useOrg();
   const api = useApi();
   const { user } = usePrivy();
+  const { generateAuthorizationSignature } = useAuthorizationSignature();
 
   const [email, setEmail] = useState("");
   const [role, setRole] = useState<MemberRole>("finance_officer");
@@ -136,15 +146,30 @@ export default function TeamPage() {
     }
   };
 
-  const approveGovernance = async (recordId: string) => {
+  const approveGovernance = async (recordId: string, row?: GovernanceRow) => {
     setGovBusyId(recordId);
     setGovError(null);
     try {
-      // The server signs with the org signer key after verifying your role.
-      await api(`/api/governance/${recordId}/approve`, {
-        method: "POST",
-        body: JSON.stringify({}),
-      });
+      // Threshold ≥ 2 with enough humans: YOUR embedded wallet signs —
+      // the browser generates an intent-bound authorization signature and
+      // the server submits it. Otherwise the server signs with the org key.
+      if ((row?.threshold ?? 2) >= 2 && !row?.iSigned && row?.signatureInput) {
+        // eslint-disable-next-line react-hooks/purity -- sign-time timestamp
+        const timestamp = Date.now();
+        const { signature } = await generateAuthorizationSignature({
+          ...row.signatureInput,
+          timestamp,
+        });
+        await api(`/api/governance/${recordId}/approve`, {
+          method: "POST",
+          body: JSON.stringify({ signature, timestamp }),
+        });
+      } else {
+        await api(`/api/governance/${recordId}/approve`, {
+          method: "POST",
+          body: JSON.stringify({}),
+        });
+      }
       await refresh();
       await loadGovernance();
     } catch (err) {
@@ -271,9 +296,13 @@ export default function TeamPage() {
                       </div>
                       <Button
                         disabled={govBusyId !== null}
-                        onClick={() => approveGovernance(g._id)}
+                        onClick={() => approveGovernance(g._id, g)}
                       >
-                        {govBusyId === g._id ? "Signing…" : "Approve & sign"}
+                        {govBusyId === g._id
+                          ? "Signing…"
+                          : g.iSigned
+                            ? "Signed ✓"
+                            : "Approve & sign"}
                       </Button>
                     </div>
                   </div>

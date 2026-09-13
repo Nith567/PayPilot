@@ -5,7 +5,7 @@ import { useEffect, useState } from "react";
 import { useApi } from "@/lib/client-api";
 import { useOrg } from "@/lib/dashboard-context";
 import { addressUrl } from "@/lib/chain";
-import { Badge, Button, Card, CopyAddr } from "@/app/ui";
+import { Button, Card, CopyAddr } from "@/app/ui";
 import type { ActivityDoc } from "@/lib/types";
 import { PersonalWalletCard } from "./team/personal-wallet-card";
 

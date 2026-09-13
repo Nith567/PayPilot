@@ -1,7 +1,12 @@
 import { apiError, json, withAuth } from '@/lib/api-helpers';
 import { resolveMembershipForUser } from '@/lib/authz';
 import { governance, members, orgs } from '@/lib/db';
-import { authorizeIntentWithOrgSigner, getIntent } from '@/lib/intent-sign';
+import {
+  authorizeIntentWithOrgSigner,
+  getIntent,
+  shouldOrgKeySign,
+  submitUserSignature,
+} from '@/lib/intent-sign';
 import type { GovernanceDoc } from '@/lib/types';
 
 // A quorum member approves a governance request. Signing is server-side:
@@ -27,8 +32,20 @@ export const POST = withAuth(async (req, userId, { params }) => {
     return apiError('You are not a signer on this governance request', 403);
   }
 
-  // Org signer key signs the quorum-mutation intent's stored request.
-  await authorizeIntentWithOrgSigner(record.intentId);
+  // The caller's embedded wallet may have produced a signature (threshold ≥ 2
+  // with enough humans) — submit it first.
+  const body = await req.json().catch(() => ({}));
+  const signature: string | undefined = body?.signature;
+  const timestamp: number | undefined = body?.timestamp;
+  if (signature && typeof timestamp === 'number') {
+    await submitUserSignature(record.intentId, signature, timestamp);
+  }
+
+  // The org signer key signs when a single signature suffices (threshold 1)
+  // or when the humans alone can't reach the threshold.
+  if (shouldOrgKeySign(intent)) {
+    await authorizeIntentWithOrgSigner(record.intentId);
+  }
 
   // Refresh intent state and apply app-side effects if executed
   const fresh = await getIntent(record.intentId);

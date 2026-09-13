@@ -5,6 +5,8 @@ import { checkPolicyGates, syncPayoutStatus } from '@/lib/payouts';
 import {
   authorizeIntentWithOrgSigner,
   getIntent,
+  shouldOrgKeySign,
+  submitUserSignature,
 } from '@/lib/intent-sign';
 
 // Approve a payout. The HUMAN decision: the caller must be an authenticated
@@ -39,9 +41,21 @@ export const POST = withAuth(async (_req, userId, { params }) => {
     );
   }
 
-  // Org signer key signs the intent's stored request; Privy executes
-  // once the quorum threshold is met.
-  await authorizeIntentWithOrgSigner(payout.intentId);
+  // The caller's embedded wallet may have produced a signature (threshold ≥ 2
+  // with enough humans) — submit it first.
+  const body = await _req.json().catch(() => ({}));
+  const signature: string | undefined = body?.signature;
+  const timestamp: number | undefined = body?.timestamp;
+  if (signature && typeof timestamp === 'number') {
+    await submitUserSignature(payout.intentId, signature, timestamp);
+  }
+
+  // The org signer key signs when a single signature suffices (threshold 1)
+  // or when the humans alone can't reach the threshold.
+  const intentBefore = await getIntent(payout.intentId);
+  if (shouldOrgKeySign(intentBefore)) {
+    await authorizeIntentWithOrgSigner(payout.intentId);
+  }
 
   // Refresh signer state from Privy and sync execution status
   const freshIntent = await getIntent(payout.intentId);

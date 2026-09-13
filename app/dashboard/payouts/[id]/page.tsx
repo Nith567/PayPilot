@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useParams } from "next/navigation";
+import { useAuthorizationSignature } from "@privy-io/react-auth";
 import { useApi } from "@/lib/client-api";
 import { txUrl } from "@/lib/chain";
 import { Badge, Button, Card, StatusChip } from "@/app/ui";
@@ -18,15 +19,27 @@ interface IntentInfo {
   threshold: number | null;
   members: IntentMember[];
   expiresAt: number | null;
+  customExpiry: boolean;
+}
+
+interface SigningInput {
+  version: 1;
+  method: "POST" | "PUT" | "PATCH" | "DELETE";
+  url: string;
+  body: Record<string, unknown>;
+  headers: { "privy-app-id": string; "privy-request-expiry"?: string };
+  intent_id: string;
 }
 
 export default function PayoutDetailPage() {
   const params = useParams<{ id: string }>();
   const id = params.id;
   const api = useApi();
+  const { generateAuthorizationSignature } = useAuthorizationSignature();
 
   const [payout, setPayout] = useState<PayoutDoc | null>(null);
   const [intent, setIntent] = useState<IntentInfo | null>(null);
+  const [signatureInput, setSignatureInput] = useState<SigningInput | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -35,6 +48,7 @@ export default function PayoutDetailPage() {
       const data = await api(`/api/payouts/${id}`);
       setPayout(data.payout);
       setIntent(data.intent);
+      setSignatureInput(data.signatureInput ?? null);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load payout");
     }
@@ -56,13 +70,29 @@ export default function PayoutDetailPage() {
     setBusy(true);
     setError(null);
     try {
-      // The server signs with the org signer key after verifying your role
-      // and the policy gates.
-      const data = await api(`/api/payouts/${id}/approve`, {
-        method: "POST",
-        body: JSON.stringify({}),
-      });
-      setPayout(data.payout);
+      // Threshold ≥ 2 with enough humans: YOUR embedded wallet signs — the
+      // browser generates an intent-bound authorization signature and the
+      // server submits it. Otherwise (threshold 1, or the humans alone can't
+      // reach the threshold) the server signs with the org signer key after
+      // verifying your role and the policy gates.
+      if ((intent?.threshold ?? 2) >= 2 && !userSigned && signatureInput) {
+        const timestamp = Date.now();
+        const { signature } = await generateAuthorizationSignature({
+          ...signatureInput,
+          timestamp,
+        });
+        const data = await api(`/api/payouts/${id}/approve`, {
+          method: "POST",
+          body: JSON.stringify({ signature, timestamp }),
+        });
+        setPayout(data.payout);
+      } else {
+        const data = await api(`/api/payouts/${id}/approve`, {
+          method: "POST",
+          body: JSON.stringify({}),
+        });
+        setPayout(data.payout);
+      }
       load();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Approval failed");
@@ -208,10 +238,9 @@ export default function PayoutDetailPage() {
               {busy ? "Signing…" : userSigned ? "Signed ✓" : "Approve & sign"}
             </Button>
             <p className="text-xs text-muted">
-              Approval is signed server-side with your Privy session key. When
-              the quorum threshold is met, Privy executes — and the
-              wallet&apos;s policy (allowlist, caps) is checked at signature
-              time.
+              {(intent?.threshold ?? 2) >= 2
+                ? "Your embedded wallet signs this approval (an intent-bound authorization signature). When the quorum threshold is met, Privy executes — and the wallet's policy (allowlist, caps) is checked at signature time."
+                : "Approval is signed server-side with the org signer key. When the quorum threshold is met, Privy executes — and the wallet's policy (allowlist, caps) is checked at signature time."}
             </p>
           </>
         ) : null}

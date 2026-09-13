@@ -1,7 +1,7 @@
 import canonicalize from 'canonicalize';
 import { encodeFunctionData } from 'viem';
 import { getChain } from './chain';
-import { PRIVY_API_BASE, privyFetch } from './privy';
+import { privyFetch } from './privy';
 import { requireEnv } from './env';
 import { orgSignerSignPayload } from './app-signer';
 
@@ -55,45 +55,42 @@ export function buildUsdcTransferRpc(recipient: string, amountUsdc: number) {
   };
 }
 
-// The structured signing input every approver signs. Approvers pass this
-// object directly to useAuthorizationSignature().generateAuthorizationSignature()
-// — Privy's client hook canonicalizes it. The payload must match the
-// intent's request_details EXACTLY ({version, method, url, body, headers} —
-// no intent_id: adding one shifts the canonical bytes and Privy rejects
-// with "Invalid signature for intent").
-export interface SignatureInput {
+// The structured input a browser signs with useAuthorizationSignature() for
+// intent authorization — the full intent-bound payload minus the timestamp
+// (the client adds a fresh timestamp right before signing and sends the same
+// value to the authorize endpoint). Privy's hook canonicalizes every field
+// present, so the shape must match the API's expected payload exactly.
+export interface IntentBoundSigningInput {
   version: 1;
   method: 'POST' | 'PUT' | 'PATCH' | 'DELETE';
   url: string;
   body: Record<string, unknown>;
-  headers: { 'privy-app-id': string };
+  headers: { 'privy-app-id': string; 'privy-request-expiry'?: string };
+  intent_id: string;
 }
 
-// Payout intents: the underlying wallet RPC request.
-export function buildIntentSignatureInput(
-  walletId: string,
-  rpcBody: Record<string, unknown>,
-): SignatureInput {
-  return {
-    version: 1,
-    method: 'POST',
-    url: `${PRIVY_API_BASE}/v1/wallets/${walletId}/rpc`,
-    body: rpcBody,
-    headers: { 'privy-app-id': requireEnv('NEXT_PUBLIC_PRIVY_APP_ID') },
+// Build the browser signing input from the intent's stored request_details —
+// headers carry privy-request-expiry = expires_at when the intent has a
+// custom expiry (mirrors Privy's own SDK construction).
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function buildIntentBoundInput(intent: any): IntentBoundSigningInput {
+  const rd = intent.request_details as {
+    method: 'POST' | 'PUT' | 'PATCH' | 'DELETE';
+    url: string;
+    body: Record<string, unknown>;
   };
-}
-
-// Governance intents: the underlying key-quorum PATCH.
-export function buildQuorumSignatureInput(
-  quorumId: string,
-  body: Record<string, unknown>,
-): SignatureInput {
   return {
     version: 1,
-    method: 'PATCH',
-    url: `${PRIVY_API_BASE}/v1/key_quorums/${quorumId}`,
-    body,
-    headers: { 'privy-app-id': requireEnv('NEXT_PUBLIC_PRIVY_APP_ID') },
+    method: rd.method,
+    url: rd.url,
+    body: rd.body,
+    headers: {
+      'privy-app-id': requireEnv('NEXT_PUBLIC_PRIVY_APP_ID'),
+      ...(intent.custom_expiry
+        ? { 'privy-request-expiry': String(Math.trunc(intent.expires_at)) }
+        : {}),
+    },
+    intent_id: intent.intent_id,
   };
 }
 
@@ -106,6 +103,42 @@ export async function getIntent(intentId: string): Promise<any> {
     throw new Error(`getIntent failed: ${res.status} ${await res.text()}`);
   }
   return res.json();
+}
+
+// Submit a browser-made user authorization signature (useAuthorizationSignature)
+// to the intent authorize endpoint. The timestamp must equal the one embedded
+// in the signed payload. One signature per call; Privy executes automatically
+// once the quorum threshold is met.
+export async function submitUserSignature(
+  intentId: string,
+  signature: string,
+  timestamp: number,
+): Promise<void> {
+  const res = await privyFetch(`/v1/intents/${intentId}/authorize`, {
+    method: 'POST',
+    body: JSON.stringify({ signature, timestamp }),
+  });
+  if (!res.ok) {
+    throw new Error(
+      `Privy rejected the signature: ${await res.text()}`,
+    );
+  }
+}
+
+// Whether the org signer key should sign this intent. It signs when a single
+// signature suffices (threshold 1 — the Ops single-approver flow) or when the
+// humans alone cannot reach the threshold (e.g. 2-of-2 with one human + the
+// key). When enough humans exist to meet the threshold, only their
+// embedded-wallet signatures count — that keeps multi-human approval honest.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function shouldOrgKeySign(intent: any): boolean {
+  const details = intent?.authorization_details?.[0];
+  const members: { type: string; signed_at?: number | null }[] =
+    details?.members ?? [];
+  const threshold: number = details?.threshold ?? 1;
+  const keySigned = members.some((m) => m.type === 'key' && m.signed_at);
+  const humanCount = members.filter((m) => m.type === 'user').length;
+  return !keySigned && (threshold === 1 || threshold > humanCount);
 }
 
 // Authorize an intent with the org signer key. The signed payload mirrors
