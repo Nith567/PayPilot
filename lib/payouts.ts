@@ -7,7 +7,7 @@ import { getChain, viemChain } from './chain';
 import { DEFAULT_TIER_USD, capWeiHex } from './policy-presets';
 
 // ── Policy gates (app-side pre-checks, mirrored by Privy's enclave policies) ──
-// Before PolicyBot co-signs, it re-checks the org's policy in the app layer.
+// Pre-checked here; the same rules are enforced by Privy's enclave policies.
 // The Privy policy on the wallet enforces the same rules at signature time,
 // so a spoofed recipient or an over-cap amount is stopped twice.
 

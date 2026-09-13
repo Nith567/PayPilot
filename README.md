@@ -157,7 +157,7 @@ pnpm gen:keys          # prints POLICYBOT_PRIVATE_KEY + DEV_EOA_PRIVATE_KEY
 - Paste both keys into `.env.local`.
 - Fund the printed **dev EOA address** once with free test USDC at
   https://faucet.circle.com (Base Sepolia). This is the demo bank: it tops
-  up the Acme demo treasury. Real orgs fund themselves via the in-app Fund
+  (self-funding via the in-app Fund
   screen. Without it the demo still works — the treasury just starts at $0.
 
 ### 4. Run
@@ -166,7 +166,7 @@ pnpm gen:keys          # prints POLICYBOT_PRIVATE_KEY + DEV_EOA_PRIVATE_KEY
 pnpm dev
 ```
 
-Open http://localhost:3000 → **Try Acme Corp demo**.
+Open http://localhost:3000 → **Create your organization**.
 
 ### 5. Deploy (Vercel) + publish the repo
 
@@ -211,7 +211,7 @@ scripts/
 
 - **Scheduled/recurring sends** — "pay vendor X $500 every Monday" via
   Privy's wallet-automations API (`AttachWalletAutomationRequestBody`), with
-  every run still gated by the wallet's policy + PolicyBot co-signature
+  every run still gated by the wallet's policy at signature time
 - **Email-triggered flows** — Resend inbox → invoice parsed (LLM) → route to
   auto-pay or quorum escalation; spoofed-address invoices blocked at the
   policy layer (the fraud-beat, now automated)
