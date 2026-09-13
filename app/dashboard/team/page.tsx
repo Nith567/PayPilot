@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { getIdentityToken, usePrivy } from "@privy-io/react-auth";
+import { useAuthorizationSignature, usePrivy } from "@privy-io/react-auth";
 import { useApi } from "@/lib/client-api";
 import { useOrg } from "@/lib/dashboard-context";
 import { ROLE_LABELS } from "@/lib/types";
@@ -28,6 +28,7 @@ export default function TeamPage() {
   const { org, members, myRole, refresh } = useOrg();
   const api = useApi();
   const { user } = usePrivy();
+  const { generateAuthorizationSignature } = useAuthorizationSignature();
 
   const [email, setEmail] = useState("");
   const [role, setRole] = useState<MemberRole>("finance_officer");
@@ -140,14 +141,12 @@ export default function TeamPage() {
     setGovBusyId(recordId);
     setGovError(null);
     try {
-      // Signing happens server-side (identity token → user signing key
-      // exchange).
-      const idToken = await getIdentityToken();
-      if (!idToken) throw new Error("No identity token — sign out and back in");
+      const { signatureInput } = await api(`/api/governance/${recordId}`);
+      if (!signatureInput) throw new Error("Nothing to sign");
+      const { signature } = await generateAuthorizationSignature(signatureInput);
       await api(`/api/governance/${recordId}/approve`, {
         method: "POST",
-        body: JSON.stringify({}),
-        headers: { "x-privy-id-token": idToken },
+        body: JSON.stringify({ signature }),
       });
       await refresh();
       await loadGovernance();
